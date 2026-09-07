@@ -300,8 +300,10 @@ export default function AdminDashboard({ route, navigation }) {
             </View>
           </View>
           <View style={styles.liveCounterBadge}>
-            <View style={styles.liveGreenDot} />
-            <Text style={styles.liveCounterBadgeText}>SYNCED</Text>
+            <View style={[styles.liveGreenDot, mealsServed > 0 && { backgroundColor: '#15803D' }]} />
+            <Text style={styles.liveCounterBadgeText}>
+              {mealsServed > 0 ? `${mealsServed} SERVED` : (telemetryOnline ? 'SCANNER ACTIVE' : 'SYNCED')}
+            </Text>
           </View>
         </View>
 
@@ -310,6 +312,7 @@ export default function AdminDashboard({ route, navigation }) {
           onPress={() => navigation.navigate('AdminMealDistribution', {
             targetMeals: targetMeals,
             attendanceRecord: attendanceRecords['8C'],
+            mealsServed: mealsServed,
           })}
           activeOpacity={0.88}
         >
@@ -318,17 +321,41 @@ export default function AdminDashboard({ route, navigation }) {
               <Ionicons name="restaurant" size={22} color={COLORS.goldDark} />
             </View>
             <View style={styles.mealInfoCol}>
-              <Text style={styles.mealCardTitle} numberOfLines={1}>Today's Lunch List</Text>
-              <Text style={styles.mealCardSub} numberOfLines={1}>Class 8C · Verified morning roll-call</Text>
+              <Text style={styles.mealCardTitle} numberOfLines={1}>Today's Lunch Roster</Text>
+              <Text style={styles.mealCardSub} numberOfLines={1}>
+                {mealsServed > 0
+                  ? `${mealsServed} of ${targetMeals || 20} meals verified & taken`
+                  : `Class 8C · ${targetMeals || 20} students eligible for lunch`}
+              </Text>
             </View>
             <View style={styles.mealPillBadge}>
-              <Text style={styles.mealPillNum}>{targetMeals}</Text>
-              <Text style={styles.mealPillTotal}>ELIGIBLE</Text>
+              <Text style={styles.mealPillNum}>{mealsServed}</Text>
+              <Text style={styles.mealPillTotal}>/ {targetMeals || 20} TAKEN</Text>
+            </View>
+          </View>
+
+          {/* Real-time progress bar */}
+          <View style={styles.mealProgressWrap}>
+            <View style={styles.mealProgressTrack}>
+              <View
+                style={[
+                  styles.mealProgressFill,
+                  { width: `${Math.min(100, Math.round((mealsServed / Math.max(1, targetMeals || 20)) * 100))}%` },
+                ]}
+              />
+            </View>
+            <View style={styles.mealProgressLabels}>
+              <Text style={styles.mealProgressPct}>
+                {Math.min(100, Math.round((mealsServed / Math.max(1, targetMeals || 20)) * 100))}% Verified
+              </Text>
+              <Text style={styles.mealProgressRemain}>
+                {Math.max(0, (targetMeals || 20) - mealsServed)} Pending
+              </Text>
             </View>
           </View>
 
           <View style={styles.openMealScreenBtn}>
-            <Text style={styles.openMealScreenBtnText}>View Eligible Students</Text>
+            <Text style={styles.openMealScreenBtnText}>View Real-Time Lunch List</Text>
             <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
           </View>
         </TouchableOpacity>
@@ -715,6 +742,36 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     fontWeight: '800',
     color: COLORS.primaryLight,
+  },
+  mealProgressWrap: {
+    marginBottom: 10,
+  },
+  mealProgressTrack: {
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  mealProgressFill: {
+    height: '100%',
+    backgroundColor: '#16A34A',
+    borderRadius: 3,
+  },
+  mealProgressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mealProgressPct: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.present,
+  },
+  mealProgressRemain: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMedium,
   },
   openMealScreenBtn: {
     flexDirection: 'row',

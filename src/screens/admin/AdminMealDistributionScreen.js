@@ -39,7 +39,12 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
   const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false);
   const [resolvedStudents, setResolvedStudents] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState('PRESENT');
+  const [filterTab, setFilterTab] = useState('ALL');
+
+  // Real-time camera telemetry state
+  const [localServedRolls, setLocalServedRolls] = useState([]);
+  const [lastScannedStudent, setLastScannedStudent] = useState(null);
+  const [telemetryOnline, setTelemetryOnline] = useState(false);
 
   const students = useMemo(() => STUDENTS_BY_CLASS['8C'] || [], []);
 
@@ -52,6 +57,46 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
   const absentStudents = useMemo(() =>
     students.filter(s => attMap[s.id] === 'A'), [students, attMap]
   );
+
+  // Set of served roll numbers merging Supabase cloud + local scanner
+  const servedRolls = useMemo(() => {
+    const set = new Set();
+    const cloudRolls = attMap?._served_rolls || [];
+    cloudRolls.forEach(r => {
+      set.add(String(r).trim());
+      set.add(String(r).padStart(2, '0'));
+      const parsed = parseInt(r, 10);
+      if (!isNaN(parsed)) set.add(String(parsed));
+    });
+    localServedRolls.forEach(r => {
+      set.add(String(r).trim());
+      set.add(String(r).padStart(2, '0'));
+      const parsed = parseInt(r, 10);
+      if (!isNaN(parsed)) set.add(String(parsed));
+    });
+    return set;
+  }, [attMap, localServedRolls]);
+
+  // Determine meal status for student: 'SERVED' | 'ELIGIBLE' | 'LOCKED' | 'PENDING'
+  const getMealStatus = useCallback((student) => {
+    const isAbsent = attMap[student.id] === 'A';
+    if (isAbsent) return 'LOCKED';
+
+    const isPresent = attMap[student.id] === 'P';
+    const isServed = servedRolls.has(student.rollNo) ||
+                     servedRolls.has(String(parseInt(student.rollNo, 10))) ||
+                     servedRolls.has(student.id);
+
+    if (isServed) return 'SERVED';
+    if (isPresent) return 'ELIGIBLE';
+    return 'PENDING';
+  }, [attMap, servedRolls]);
+
+  const mealsTakenCount = useMemo(() => {
+    return presentStudents.filter(s => getMealStatus(s) === 'SERVED').length;
+  }, [presentStudents, getMealStatus]);
+
+  const pendingEligibleCount = Math.max(0, presentStudents.length - mealsTakenCount);
 
   // Absent students whose meal entitlement is locked
   const FLAGGED_STUDENTS = useMemo(() => {
@@ -83,17 +128,47 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
   useEffect(() => {
     fetchCloudRecords();
     const unsubRealtime = subscribeToRealtimeAttendance(fetchCloudRecords);
-    const pollInterval = setInterval(fetchCloudRecords, 4000);
+    const pollInterval = setInterval(fetchCloudRecords, 2500);
+
+    // Fast local telemetry polling from camera scanner (port 5050)
+    const telemetryInterval = setInterval(async () => {
+      const hosts = ['192.168.1.6:5050', 'localhost:5050'];
+      for (const h of hosts) {
+        try {
+          const res = await fetch(`http://${h}/status`, { method: 'GET' });
+          if (res.ok) {
+            const data = await res.json();
+            setTelemetryOnline(true);
+            if (Array.isArray(data.served_rolls)) {
+              setLocalServedRolls(data.served_rolls);
+            }
+            if (data.last_scanned) {
+              setLastScannedStudent(data.last_scanned);
+            }
+            break;
+          }
+        } catch (e) {
+          setTelemetryOnline(false);
+        }
+      }
+    }, 2000);
+
     return () => {
       if (unsubRealtime) unsubRealtime();
       clearInterval(pollInterval);
+      clearInterval(telemetryInterval);
     };
   }, [fetchCloudRecords]);
 
   const filteredStudents = useMemo(() => {
     let base = students;
-    if (filterTab === 'PRESENT') base = presentStudents;
-    else if (filterTab === 'ABSENT') base = absentStudents;
+    if (filterTab === 'SERVED') {
+      base = students.filter(s => getMealStatus(s) === 'SERVED');
+    } else if (filterTab === 'ELIGIBLE') {
+      base = students.filter(s => getMealStatus(s) === 'ELIGIBLE');
+    } else if (filterTab === 'LOCKED') {
+      base = students.filter(s => getMealStatus(s) === 'LOCKED');
+    }
 
     if (!searchQuery.trim()) return base;
     const q = searchQuery.toLowerCase().trim();
@@ -102,7 +177,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
       s.rollNo.includes(q) ||
       s.id.toLowerCase().includes(q)
     );
-  }, [students, presentStudents, absentStudents, searchQuery, filterTab]);
+  }, [students, filterTab, searchQuery, getMealStatus]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -125,7 +200,9 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         </View>
 
         <View style={styles.udiseTag}>
-          <Text style={styles.udiseTagText}>CLASS 8C</Text>
+          <Text style={styles.udiseTagText}>
+            {telemetryOnline ? 'SCANNER LIVE' : (isSubmitted ? 'VERIFIED' : 'PENDING')}
+          </Text>
         </View>
       </View>
 
@@ -136,14 +213,21 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
           <View style={styles.bannerHeader}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={styles.bannerClassName} numberOfLines={1}>Today's Lunch Roster</Text>
-              <Text style={styles.bannerSchool} numberOfLines={1}>Auto-calculated from morning attendance</Text>
+              <Text style={styles.bannerSchool} numberOfLines={1}>
+                {mealsTakenCount > 0
+                  ? `${mealsTakenCount} of ${presentStudents.length} meals served in real time`
+                  : 'QR biometric authentication active'}
+              </Text>
             </View>
-            <View style={styles.statusBadge}>
-              <Ionicons name="checkmark-circle" size={13} color="#15803D" />
-              <Text style={styles.statusBadgeText}>ATTENDANCE SYNCED</Text>
+            <View style={[styles.statusBadge, mealsTakenCount > 0 && styles.statusBadgeActive]}>
+              <View style={[styles.liveDot, { backgroundColor: mealsTakenCount > 0 ? '#15803D' : '#0369A1' }]} />
+              <Text style={[styles.statusBadgeText, { color: mealsTakenCount > 0 ? '#15803D' : '#0369A1' }]}>
+                {mealsTakenCount > 0 ? `${mealsTakenCount} SERVED` : 'READY'}
+              </Text>
             </View>
           </View>
 
+          {/* 4-Metric Strip */}
           <View style={styles.statsStrip}>
             <View style={styles.statCol}>
               <Text style={styles.statVal}>{students.length}</Text>
@@ -151,39 +235,62 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={[styles.statVal, { color: COLORS.present }]}>
-                {isSubmitted ? presentStudents.length : 0}
+              <Text style={[styles.statVal, { color: '#15803D' }]}>
+                {mealsTakenCount}
               </Text>
-              <Text style={styles.statLabel}>LUNCH ELIGIBLE</Text>
+              <Text style={[styles.statLabel, { color: '#15803D' }]}>MEAL TAKEN</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCol}>
+              <Text style={[styles.statVal, { color: '#D97706' }]}>
+                {pendingEligibleCount}
+              </Text>
+              <Text style={styles.statLabel}>PENDING</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
               <Text style={[styles.statVal, { color: COLORS.absent }]}>
-                {isSubmitted ? absentStudents.length : 0}
+                {absentStudents.length}
               </Text>
-              <Text style={styles.statLabel}>LOCKED (ABSENT)</Text>
+              <Text style={styles.statLabel}>LOCKED</Text>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.integrityRow}
-            onPress={() => activeFlagCount > 0 && setShowDiscrepancyModal(true)}
-            activeOpacity={activeFlagCount > 0 ? 0.7 : 1}
-          >
-            <Ionicons
-              name={activeFlagCount > 0 ? "shield-checkmark" : "checkmark-circle"}
-              size={14}
-              color={activeFlagCount > 0 ? COLORS.goldDark : COLORS.present}
-            />
-            <Text style={styles.integrityText} numberOfLines={1}>
-              {activeFlagCount > 0
-                ? `${activeFlagCount} absent students locked from lunch (Tap to review)`
-                : '100% Attendance Verified · Entitlements locked for absent students'}
-            </Text>
-            {activeFlagCount > 0 && (
-              <Ionicons name="chevron-forward" size={13} color={COLORS.goldDark} />
-            )}
-          </TouchableOpacity>
+          {/* Live Scanner Activity / Integrity Banner */}
+          {lastScannedStudent ? (
+            <View style={styles.liveScanBanner}>
+              <Ionicons
+                name={lastScannedStudent.is_discrepancy ? "alert-circle" : "checkmark-circle"}
+                size={14}
+                color={lastScannedStudent.is_discrepancy ? "#DC2626" : "#15803D"}
+              />
+              <Text style={styles.liveScanText} numberOfLines={1}>
+                {lastScannedStudent.is_discrepancy
+                  ? `Flagged: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) is absent!`
+                  : `Just Verified: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) · Meal Issued`}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.integrityRow}
+              onPress={() => activeFlagCount > 0 && setShowDiscrepancyModal(true)}
+              activeOpacity={activeFlagCount > 0 ? 0.7 : 1}
+            >
+              <Ionicons
+                name={activeFlagCount > 0 ? "shield-checkmark" : "checkmark-circle"}
+                size={14}
+                color={activeFlagCount > 0 ? COLORS.goldDark : COLORS.present}
+              />
+              <Text style={styles.integrityText} numberOfLines={1}>
+                {activeFlagCount > 0
+                  ? `${activeFlagCount} absent students locked from lunch (Tap to review)`
+                  : '100% Attendance Verified · Entitlements locked for absent students'}
+              </Text>
+              {activeFlagCount > 0 && (
+                <Ionicons name="chevron-forward" size={13} color={COLORS.goldDark} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Search and Filters */}
@@ -206,9 +313,10 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
 
           <View style={styles.filterPillsRow}>
             {[
-              { key: 'PRESENT', label: 'Eligible', count: isSubmitted ? presentStudents.length : 0 },
-              { key: 'ABSENT',  label: 'Locked',   count: isSubmitted ? absentStudents.length : 0 },
-              { key: 'ALL',     label: 'All',      count: students.length },
+              { key: 'ALL',      label: 'All',        count: students.length },
+              { key: 'SERVED',   label: 'Meal Taken', count: mealsTakenCount },
+              { key: 'ELIGIBLE', label: 'Eligible',   count: pendingEligibleCount },
+              { key: 'LOCKED',   label: 'Locked',     count: absentStudents.length },
             ].map((tab) => {
               const active = filterTab === tab.key;
               return (
@@ -231,25 +339,34 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         <View style={styles.studentsList}>
           {filteredStudents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="people-outline" size={36} color={COLORS.textLight} />
-              <Text style={styles.emptyStateText}>No students found</Text>
+              <Ionicons name="restaurant-outline" size={36} color={COLORS.textLight} />
+              <Text style={styles.emptyStateText}>
+                {filterTab === 'SERVED' ? 'No meals verified yet today' : 'No students found'}
+              </Text>
             </View>
           ) : (
             filteredStudents.map((st) => {
-              const isPresent = attMap[st.id] === 'P';
-              const isAbsent = attMap[st.id] === 'A';
+              const status = getMealStatus(st);
+              const isServed = status === 'SERVED';
+              const isEligible = status === 'ELIGIBLE';
+              const isLocked = status === 'LOCKED';
 
               return (
                 <View
                   key={st.id}
                   style={[
                     styles.studentCard,
-                    isAbsent && styles.studentCardAbsent,
+                    isServed && styles.studentCardServed,
+                    isLocked && styles.studentCardAbsent,
                   ]}
                 >
                   {/* Avatar */}
-                  <View style={[styles.avatar, { backgroundColor: getAvatarColor(st.rollNo) }]}>
-                    <Text style={styles.avatarText}>{getInitials(st.name)}</Text>
+                  <View style={[styles.avatar, { backgroundColor: isServed ? '#15803D' : getAvatarColor(st.rollNo) }]}>
+                    {isServed ? (
+                      <Ionicons name="checkmark" size={18} color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.avatarText}>{getInitials(st.name)}</Text>
+                    )}
                   </View>
 
                   {/* Details */}
@@ -268,27 +385,22 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                   </View>
 
                   {/* Status Pill */}
-                  <View style={[
-                    styles.statusPill,
-                    isPresent && styles.pillPresent,
-                    isAbsent && styles.pillAbsent,
-                    !isPresent && !isAbsent && styles.pillAwaiting,
-                  ]}>
-                    <View style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor: isPresent ? COLORS.present : (isAbsent ? COLORS.absent : '#D97706'),
-                      },
-                    ]} />
-                    <Text style={[
-                      styles.statusPillText,
-                      {
-                        color: isPresent ? COLORS.present : (isAbsent ? COLORS.absent : '#B45309'),
-                      },
-                    ]}>
-                      {isPresent ? 'Eligible' : (isAbsent ? 'Locked' : 'Pending')}
-                    </Text>
-                  </View>
+                  {isServed ? (
+                    <View style={[styles.statusPill, styles.pillServed]}>
+                      <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                      <Text style={[styles.statusPillText, styles.statusTextServed]}>Meal Taken</Text>
+                    </View>
+                  ) : isEligible ? (
+                    <View style={[styles.statusPill, styles.pillEligible]}>
+                      <Ionicons name="restaurant-outline" size={11} color="#0369A1" />
+                      <Text style={[styles.statusPillText, styles.statusTextEligible]}>Eligible</Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.statusPill, styles.pillAbsent]}>
+                      <Ionicons name="lock-closed" size={11} color="#DC2626" />
+                      <Text style={[styles.statusPillText, styles.statusTextAbsent]}>Locked</Text>
+                    </View>
+                  )}
                 </View>
               );
             })
@@ -417,7 +529,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(191,160,80,0.4)',
   },
   udiseTagText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: COLORS.goldLight,
   },
@@ -455,18 +567,26 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DCFCE7',
+    gap: 5,
+    backgroundColor: '#E0F2FE',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  statusBadgeActive: {
+    backgroundColor: '#DCFCE7',
     borderColor: '#86EFAC',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
-    color: '#15803D',
   },
   statsStrip: {
     flexDirection: 'row',
@@ -483,20 +603,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statVal: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: COLORS.textDark,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: COLORS.textMedium,
     marginTop: 2,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   statDivider: {
     width: 1,
-    height: 26,
+    height: 24,
     backgroundColor: COLORS.divider,
   },
   integrityRow: {
@@ -514,6 +634,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: COLORS.textDark,
+    flex: 1,
+  },
+  liveScanBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  liveScanText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
     flex: 1,
   },
   controlsCard: {
@@ -544,7 +681,7 @@ const styles = StyleSheet.create({
   },
   filterPillsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   filterPill: {
     flex: 1,
@@ -560,7 +697,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryDark,
   },
   filterPillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: COLORS.textMedium,
   },
@@ -590,6 +727,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     ...SHADOWS.sm,
+  },
+  studentCardServed: {
+    backgroundColor: '#FAFDFB',
+    borderColor: '#86EFAC',
   },
   studentCardAbsent: {
     backgroundColor: '#FEF8F8',
@@ -648,19 +789,35 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  pillPresent: {
+  pillServed: {
     backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  statusTextServed: {
+    color: '#15803D',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  pillEligible: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  statusTextEligible: {
+    color: '#0369A1',
+    fontSize: 10.5,
+    fontWeight: '800',
   },
   pillAbsent: {
     backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
   },
-  pillAwaiting: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  statusTextAbsent: {
+    color: '#DC2626',
+    fontSize: 10.5,
+    fontWeight: '800',
   },
   statusPillText: {
     fontSize: 10.5,
