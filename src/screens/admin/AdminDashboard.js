@@ -131,15 +131,15 @@ export default function AdminDashboard({ route, navigation }) {
 
       {/* Top App Bar */}
       <View style={styles.topBar}>
-        <View>
+        <View style={styles.topBarTitleCol}>
           <View style={styles.titleRow}>
             <Ionicons name="shield-checkmark" size={15} color={COLORS.gold} />
             <Text style={styles.appName}>PoshanSetu</Text>
             <View style={styles.auditPill}>
-              <Text style={styles.auditPillText}>PRINCIPAL AUDIT</Text>
+              <Text style={styles.auditPillText}>ADMIN</Text>
             </View>
           </View>
-          <Text style={styles.schoolSub}>{SCHOOL_INFO.name}</Text>
+          <Text style={styles.schoolSub} numberOfLines={1}>{SCHOOL_INFO.name}</Text>
         </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
@@ -151,9 +151,9 @@ export default function AdminDashboard({ route, navigation }) {
         {/* Welcome Header */}
         <View style={styles.welcomeHeader}>
           <View style={styles.welcomeRow}>
-            <View>
-              <Text style={styles.adminName}>{admin.name}</Text>
-              <Text style={styles.adminMeta}>School Principal · {SCHOOL_INFO.name}</Text>
+            <View style={styles.welcomeInfoCol}>
+              <Text style={styles.adminName} numberOfLines={1}>{admin.name}</Text>
+              <Text style={styles.adminMeta} numberOfLines={1}>School Principal · {SCHOOL_INFO.name}</Text>
             </View>
             <View style={styles.dateBadge}>
               <Ionicons name="calendar-outline" size={11} color={COLORS.goldDark} />
@@ -166,16 +166,16 @@ export default function AdminDashboard({ route, navigation }) {
         {/* SECTION 1: SCHOOL ATTENDANCE OVERVIEW                     */}
         {/* ========================================================= */}
         <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>DAILY HEADCOUNT AUDIT</Text>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionEyebrow}>ATTENDANCE</Text>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="analytics" size={17} color={COLORS.primaryDark} />
-              <Text style={styles.sectionTitle}>School Attendance Overview</Text>
+              <Ionicons name="analytics" size={16} color={COLORS.primaryDark} />
+              <Text style={styles.sectionTitle} numberOfLines={1}>School Overview</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.refreshBtn} onPress={fetchRecords} activeOpacity={0.7}>
-            <Ionicons name="refresh-outline" size={13} color={COLORS.primaryLight} />
-            <Text style={styles.refreshText}>{lastRefreshed ? lastRefreshed.split(' ')[0] : 'Live Sync'}</Text>
+            <Ionicons name="refresh-outline" size={12} color={COLORS.primaryLight} />
+            <Text style={styles.refreshText}>{lastRefreshed ? lastRefreshed.split(' ')[0] : 'Sync'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -183,26 +183,26 @@ export default function AdminDashboard({ route, navigation }) {
           <View style={styles.statsStrip}>
             <View style={styles.statCol}>
               <Text style={styles.statNum}>{totalReportedEnrolled}</Text>
-              <Text style={styles.statLabel}>ENROLLED</Text>
+              <Text style={styles.statLabel}>Enrolled</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
               <Text style={[styles.statNum, { color: hasAnySubmission ? COLORS.present : COLORS.textMedium }]}>
                 {hasAnySubmission ? totalReportedPresent : '--'}
               </Text>
-              <Text style={styles.statLabel}>PRESENT</Text>
+              <Text style={styles.statLabel}>Present</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
               <Text style={[styles.statNum, { color: hasAnySubmission ? COLORS.absent : COLORS.textMedium }]}>
                 {hasAnySubmission ? totalReportedAbsent : '--'}
               </Text>
-              <Text style={styles.statLabel}>ABSENT</Text>
+              <Text style={styles.statLabel}>Absent</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
               <Text style={[styles.statNum, { color: '#0369A1' }]}>{classesSubmitted}/{CLASSES_LIST.length}</Text>
-              <Text style={styles.statLabel}>CLASSES</Text>
+              <Text style={styles.statLabel}>Submitted</Text>
             </View>
           </View>
         </View>
@@ -211,10 +211,10 @@ export default function AdminDashboard({ route, navigation }) {
         {/* SECTION 2: REGISTERED CLASSROOMS & ROSTER                 */}
         {/* ========================================================= */}
         <View style={styles.sectionHeader}>
-          <View>
+          <View style={styles.sectionHeaderLeft}>
             <Text style={styles.sectionEyebrow}>CLASSROOM ROSTERS</Text>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="school" size={17} color={COLORS.primaryDark} />
+              <Ionicons name="school" size={16} color={COLORS.primaryDark} />
               <Text style={styles.sectionTitle}>Registered Classes</Text>
             </View>
           </View>
@@ -225,7 +225,6 @@ export default function AdminDashboard({ route, navigation }) {
           const attMap = rec?.attendanceMap || rec?.attendance_map || {};
           const hasRecord = !!rec && typeof rec.presentCount === 'number' && Object.keys(attMap).some(k => !k.startsWith('_'));
           const presentCnt = hasRecord ? rec.presentCount : 0;
-          const absentCnt = hasRecord ? (rec.absentCount ?? Math.max(0, cls.strength - presentCnt)) : 0;
           const attRate = hasRecord && cls.strength > 0 ? Math.round((presentCnt / cls.strength) * 100) : null;
 
           return (
@@ -239,23 +238,23 @@ export default function AdminDashboard({ route, navigation }) {
               activeOpacity={0.85}
             >
               <View style={styles.classCardTop}>
-                <View>
+                <View style={styles.classCardTopLeft}>
                   <View style={styles.classBadge}>
-                    <Ionicons name="school-outline" size={16} color={COLORS.primaryDark} />
+                    <Ionicons name="school-outline" size={15} color={COLORS.primaryDark} />
                     <Text style={styles.classBadgeText}>{cls.label}</Text>
                   </View>
-                  <Text style={styles.classMetaSub}>Room 104 · Grade {cls.grade} · {cls.strength} Enrolled</Text>
+                  <Text style={styles.classMetaSub} numberOfLines={1}>Grade {cls.grade} · {cls.strength} Enrolled</Text>
                 </View>
 
                 {hasRecord ? (
                   <View style={styles.submittedPill}>
-                    <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-                    <Text style={styles.submittedPillText}>Roll-Call Submitted</Text>
+                    <Ionicons name="checkmark-circle" size={11} color="#15803D" />
+                    <Text style={styles.submittedPillText}>Submitted</Text>
                   </View>
                 ) : (
                   <View style={[styles.submittedPill, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                    <Ionicons name="time-outline" size={12} color="#B45309" />
-                    <Text style={[styles.submittedPillText, { color: '#B45309' }]}>Awaiting Roll-Call</Text>
+                    <Ionicons name="time-outline" size={11} color="#B45309" />
+                    <Text style={[styles.submittedPillText, { color: '#B45309' }]}>Pending</Text>
                   </View>
                 )}
               </View>
@@ -265,24 +264,24 @@ export default function AdminDashboard({ route, navigation }) {
                   <Text style={styles.classStatNum}>
                     {hasRecord ? `${presentCnt} / ${cls.strength}` : `0 / ${cls.strength}`}
                   </Text>
-                  <Text style={styles.classStatLabel}>STUDENTS PRESENT</Text>
+                  <Text style={styles.classStatLabel}>PRESENT</Text>
                 </View>
                 <View style={styles.classStatDivider} />
                 <View style={styles.classStatItem}>
                   <Text style={[styles.classStatNum, { color: hasRecord ? COLORS.present : COLORS.textMedium }]}>
                     {hasRecord ? `${attRate}%` : '--'}
                   </Text>
-                  <Text style={styles.classStatLabel}>DAILY TURNOUT</Text>
+                  <Text style={styles.classStatLabel}>TURNOUT</Text>
                 </View>
                 <View style={styles.classStatDivider} />
                 <View style={styles.classStatItem}>
-                  <Text style={styles.classStatNumTeacher}>Sunita Sharma</Text>
-                  <Text style={styles.classStatLabel}>CLASS TEACHER</Text>
+                  <Text style={styles.classStatNumTeacher} numberOfLines={1}>S. Sharma</Text>
+                  <Text style={styles.classStatLabel}>TEACHER</Text>
                 </View>
               </View>
 
               <View style={styles.classCardFooter}>
-                <Text style={styles.viewStudentsText}>View Student Roster</Text>
+                <Text style={styles.viewStudentsText}>View Class Roster</Text>
                 <Ionicons name="arrow-forward" size={14} color={COLORS.primary} />
               </View>
             </TouchableOpacity>
@@ -293,16 +292,16 @@ export default function AdminDashboard({ route, navigation }) {
         {/* SECTION 3: TODAY'S MID-DAY MEAL DISTRIBUTION ACTION CARD  */}
         {/* ========================================================= */}
         <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>LUNCH ALLOCATION</Text>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionEyebrow}>MID-DAY MEAL</Text>
             <View style={styles.sectionTitleRow}>
-              <Ionicons name="restaurant" size={17} color={COLORS.goldDark} />
-              <Text style={styles.sectionTitle}>Today's Mid-Day Meal Distribution</Text>
+              <Ionicons name="restaurant" size={16} color={COLORS.goldDark} />
+              <Text style={styles.sectionTitle} numberOfLines={1}>Meal Distribution</Text>
             </View>
           </View>
           <View style={styles.liveCounterBadge}>
             <View style={styles.liveGreenDot} />
-            <Text style={styles.liveCounterBadgeText}>ATTENDANCE SYNCED</Text>
+            <Text style={styles.liveCounterBadgeText}>SYNCED</Text>
           </View>
         </View>
 
@@ -316,25 +315,25 @@ export default function AdminDashboard({ route, navigation }) {
         >
           <View style={styles.mealCardHeader}>
             <View style={styles.mealIconCircle}>
-              <Ionicons name="restaurant" size={24} color={COLORS.goldDark} />
+              <Ionicons name="restaurant" size={22} color={COLORS.goldDark} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.mealCardTitle}>Today's Lunch Beneficiaries</Text>
-              <Text style={styles.mealCardSub}>Class 8C · Verified from morning attendance</Text>
+            <View style={styles.mealInfoCol}>
+              <Text style={styles.mealCardTitle} numberOfLines={1}>Today's Lunch List</Text>
+              <Text style={styles.mealCardSub} numberOfLines={1}>Class 8C · Verified morning roll-call</Text>
             </View>
             <View style={styles.mealPillBadge}>
               <Text style={styles.mealPillNum}>{targetMeals}</Text>
-              <Text style={styles.mealPillTotal}>STUDENTS ELIGIBLE</Text>
+              <Text style={styles.mealPillTotal}>ELIGIBLE</Text>
             </View>
           </View>
 
           <View style={styles.openMealScreenBtn}>
-            <Text style={styles.openMealScreenBtnText}>View Today's Lunch List</Text>
-            <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+            <Text style={styles.openMealScreenBtnText}>View Eligible Students</Text>
+            <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
           </View>
         </TouchableOpacity>
 
-        <View style={{ height: 48 }} />
+        <View style={{ height: 60 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -354,6 +353,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 2,
     borderBottomColor: COLORS.gold,
+  },
+  topBarTitleCol: {
+    flex: 1,
+    marginRight: 10,
   },
   titleRow: {
     flexDirection: 'row',
@@ -381,7 +384,7 @@ const styles = StyleSheet.create({
   },
   schoolSub: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.65)',
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
   logoutBtn: {
@@ -394,6 +397,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SIZES.paddingMd,
+    paddingBottom: 70,
     backgroundColor: COLORS.background,
   },
   welcomeHeader: {
@@ -405,14 +409,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  welcomeInfoCol: {
+    flex: 1,
+    marginRight: 8,
+  },
   adminName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: COLORS.primaryDark,
     letterSpacing: -0.3,
   },
   adminMeta: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '500',
     color: COLORS.textMedium,
     marginTop: 2,
@@ -438,11 +446,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: 10,
-    marginTop: 10,
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  sectionHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
   },
   sectionEyebrow: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '800',
     color: COLORS.goldDark,
     letterSpacing: 0.8,
@@ -454,7 +466,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: COLORS.textDark,
   },
@@ -469,7 +481,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: COLORS.creamCard,
-    paddingHorizontal: 9,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
@@ -482,41 +494,43 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 14,
+    padding: 10,
+    marginBottom: 12,
     ...SHADOWS.sm,
   },
   statsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.creamCard,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.creamBorder,
-    paddingVertical: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 2,
   },
   statCol: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statNum: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
     color: COLORS.textDark,
   },
   statLabel: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 9.5,
+    fontWeight: '700',
     color: COLORS.textMedium,
-    marginTop: 3,
-    letterSpacing: 0.5,
+    marginTop: 2,
+    letterSpacing: 0.3,
   },
   statDivider: {
     width: 1,
-    height: 30,
+    height: 24,
     backgroundColor: COLORS.divider,
   },
   classCard: {
@@ -524,45 +538,49 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
-    marginBottom: 14,
+    padding: 12,
+    marginBottom: 12,
     ...SHADOWS.sm,
   },
   classCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  classCardTopLeft: {
+    flex: 1,
+    marginRight: 8,
   },
   classBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   classBadgeText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   classMetaSub: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '500',
     color: COLORS.textMedium,
-    marginTop: 2,
+    marginTop: 1,
   },
   submittedPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#86EFAC',
   },
   submittedPillText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '800',
     color: '#15803D',
   },
@@ -573,121 +591,128 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    paddingVertical: 10,
-    marginBottom: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
   },
   classStatItem: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
   },
   classStatNum: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   classStatNumTeacher: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.textDark,
   },
   classStatLabel: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '700',
     color: COLORS.textMedium,
     marginTop: 2,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   classStatDivider: {
     width: 1,
-    height: 24,
+    height: 20,
     backgroundColor: COLORS.divider,
   },
   classCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.divider,
   },
   viewStudentsText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: COLORS.primary,
   },
   liveCounterBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: '#E8F8EE',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#A5E6B8',
   },
   liveGreenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#16A34A',
   },
   liveCounterBadgeText: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '800',
     color: '#15803D',
   },
   mealActionCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: COLORS.gold,
-    padding: 16,
-    ...SHADOWS.md,
+    padding: 12,
+    ...SHADOWS.sm,
   },
   mealCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 10,
   },
   mealIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.goldPale,
     borderWidth: 1,
     borderColor: COLORS.goldLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mealInfoCol: {
+    flex: 1,
+    marginRight: 6,
+  },
   mealCardTitle: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   mealCardSub: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: COLORS.textMedium,
-    marginTop: 2,
+    marginTop: 1,
   },
   mealPillBadge: {
     backgroundColor: COLORS.primaryPale,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#C2DEC9',
+    minWidth: 54,
   },
   mealPillNum: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: COLORS.primary,
   },
   mealPillTotal: {
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: '800',
     color: COLORS.primaryLight,
   },
@@ -695,17 +720,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: COLORS.primaryDark,
-    paddingVertical: 14,
+    paddingVertical: 11,
     borderRadius: SIZES.radiusSm,
-    marginTop: 2,
     ...SHADOWS.sm,
   },
   openMealScreenBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.white,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });

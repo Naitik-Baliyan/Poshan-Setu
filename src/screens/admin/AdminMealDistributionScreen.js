@@ -117,19 +117,19 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={20} color={COLORS.white} />
-          <Text style={styles.backBtnText}>Dashboard</Text>
+          <Ionicons name="arrow-back" size={18} color={COLORS.white} />
+          <Text style={styles.backBtnText}>Back</Text>
         </TouchableOpacity>
 
         <View style={styles.navTitleWrap}>
-          <Text style={styles.navEyebrow}>MID-DAY MEAL SCHEME</Text>
-          <Text style={styles.navTitleText}>Today's Lunch Distribution</Text>
+          <Text style={styles.navTitleText} numberOfLines={1}>Lunch Distribution</Text>
+          <Text style={styles.navEyebrow}>CLASS 8C · MDM SCHEME</Text>
         </View>
 
         <View style={[styles.statusPill, isSubmitted ? styles.statusPillLive : styles.statusPillPending]}>
           <View style={[styles.statusDot, { backgroundColor: isSubmitted ? '#15803D' : '#D97706' }]} />
           <Text style={[styles.statusPillText, { color: isSubmitted ? '#15803D' : '#92400E' }]}>
-            {isSubmitted ? 'VERIFIED' : 'PENDING'}
+            {isSubmitted ? 'SYNCED' : 'PENDING'}
           </Text>
         </View>
       </View>
@@ -140,12 +140,12 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
             <View style={styles.summaryIconCircle}>
-              <Ionicons name="restaurant" size={24} color={COLORS.goldDark} />
+              <Ionicons name="restaurant" size={20} color={COLORS.goldDark} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.summaryEyebrow}>ATTENDANCE-BASED ALLOCATION</Text>
-              <Text style={styles.summaryTitle}>Lunch Beneficiaries</Text>
-              <Text style={styles.summarySub}>Class 8C · Verified morning roll-call</Text>
+            <View style={styles.summaryInfoCol}>
+              <Text style={styles.summaryEyebrow}>ATTENDANCE ALLOCATION</Text>
+              <Text style={styles.summaryTitle} numberOfLines={1}>Meal Beneficiaries</Text>
+              <Text style={styles.summarySub} numberOfLines={1}>Class 8C · Verified morning roll-call</Text>
             </View>
             <View style={styles.summaryCountBadge}>
               <Text style={styles.summaryCountNum}>{eligibleCount}</Text>
@@ -155,49 +155,48 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
 
           <View style={styles.summaryStatsRow}>
             <View style={styles.summaryStatBox}>
-              <Ionicons name="checkmark-circle" size={18} color={COLORS.present} />
               <Text style={[styles.summaryStatNum, { color: COLORS.present }]}>{presentStudents.length}</Text>
-              <Text style={styles.summaryStatLabel}>Present{'\n'}(Eligible)</Text>
+              <Text style={styles.summaryStatLabel}>Present</Text>
             </View>
             <View style={styles.summaryStatDivider} />
             <View style={styles.summaryStatBox}>
-              <Ionicons name="close-circle" size={18} color={COLORS.absent} />
               <Text style={[styles.summaryStatNum, { color: COLORS.absent }]}>{absentStudents.length}</Text>
-              <Text style={styles.summaryStatLabel}>Absent{'\n'}(Locked)</Text>
+              <Text style={styles.summaryStatLabel}>Locked</Text>
             </View>
             <View style={styles.summaryStatDivider} />
             <View style={styles.summaryStatBox}>
-              <Ionicons name="people" size={18} color={COLORS.primaryDark} />
               <Text style={styles.summaryStatNum}>{students.length}</Text>
-              <Text style={styles.summaryStatLabel}>Total{'\n'}Enrolled</Text>
+              <Text style={styles.summaryStatLabel}>Enrolled</Text>
             </View>
           </View>
 
           {isSubmitted ? (
             <View style={styles.verifiedBanner}>
-              <Ionicons name="shield-checkmark" size={14} color={COLORS.present} />
-              <Text style={styles.verifiedText}>
-                Automated Entitlement Active · Only verified present students receive lunch today
+              <Ionicons name="shield-checkmark" size={13} color={COLORS.present} />
+              <Text style={styles.verifiedText} numberOfLines={1}>
+                Entitlement active · Only present students receive lunch
               </Text>
             </View>
           ) : (
             <View style={styles.noDataBanner}>
-              <Ionicons name="hourglass-outline" size={14} color={COLORS.goldDark} />
-              <Text style={styles.noDataText}>Awaiting morning roll-call submission from Class Teacher</Text>
+              <Ionicons name="hourglass-outline" size={13} color={COLORS.goldDark} />
+              <Text style={styles.noDataText} numberOfLines={1}>
+                Awaiting morning roll-call submission from Class Teacher
+              </Text>
             </View>
           )}
         </View>
 
         {/* ── Discrepancy & Entitlement Audit ─────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>LEAKAGE PREVENTION</Text>
+          <Text style={styles.sectionEyebrow}>INTEGRITY CHECK</Text>
           <View style={styles.sectionTitleRow}>
             <Ionicons
               name="shield-checkmark"
-              size={17}
+              size={15}
               color={activeFlagCount > 0 ? '#DC2626' : COLORS.present}
             />
-            <Text style={styles.sectionTitle}>
+            <Text style={styles.sectionTitle} numberOfLines={1}>
               {activeFlagCount > 0 ? 'Entitlement Lockdown Active' : 'Integrity Check Passed'}
             </Text>
           </View>
@@ -207,19 +206,19 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
           <View style={styles.auditTop}>
             <Ionicons
               name={activeFlagCount > 0 ? 'alert-circle' : 'checkmark-done-circle'}
-              size={22}
+              size={20}
               color={activeFlagCount > 0 ? '#DC2626' : COLORS.present}
             />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.auditTitle}>
+            <View style={styles.auditInfoCol}>
+              <Text style={styles.auditTitle} numberOfLines={1}>
                 {activeFlagCount > 0
-                  ? `${activeFlagCount} absent student${activeFlagCount > 1 ? 's' : ''} locked from lunch`
-                  : 'Zero Discrepancies · Complete Integrity'}
+                  ? `${activeFlagCount} absent student${activeFlagCount > 1 ? 's' : ''} locked`
+                  : 'Zero Discrepancies · Verified'}
               </Text>
-              <Text style={styles.auditSub}>
+              <Text style={styles.auditSub} numberOfLines={2}>
                 {activeFlagCount > 0
-                  ? 'System automatically blocks meal entitlement for absent students to eliminate ghost beneficiaries.'
-                  : 'Every meal plate matches verified morning attendance perfectly.'}
+                  ? 'Meal entitlement automatically locked for absent students to prevent leakages.'
+                  : 'Every meal plate matches verified morning roll-call attendance.'}
               </Text>
             </View>
           </View>
@@ -230,29 +229,28 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
               onPress={() => setShowDiscrepancyModal(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="search-outline" size={14} color={COLORS.white} />
+              <Ionicons name="search-outline" size={13} color={COLORS.white} />
               <Text style={styles.inspectBtnText}>
-                Review {activeFlagCount} Locked Absent Student{activeFlagCount > 1 ? 's' : ''}
+                Review {activeFlagCount} Locked Student{activeFlagCount > 1 ? 's' : ''}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.white} />
+              <Ionicons name="chevron-forward" size={13} color={COLORS.white} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* ── Today's Lunch List ──────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>TODAY'S LUNCH LIST</Text>
+          <Text style={styles.sectionEyebrow}>ROSTER</Text>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="people" size={17} color={COLORS.primaryDark} />
-            <Text style={styles.sectionTitle}>Students Having Lunch Today</Text>
+            <Ionicons name="people" size={15} color={COLORS.primaryDark} />
+            <Text style={styles.sectionTitle} numberOfLines={1}>Students Having Lunch Today</Text>
           </View>
-          <Text style={styles.sectionSub}>Derived directly from verified morning attendance</Text>
         </View>
 
         {/* Search & Tabs */}
         <View style={styles.filterCard}>
           <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={15} color={COLORS.textLight} />
+            <Ionicons name="search-outline" size={14} color={COLORS.textLight} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search by name, roll no, or ID..."
@@ -262,15 +260,15 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={15} color={COLORS.textLight} />
+                <Ionicons name="close-circle" size={14} color={COLORS.textLight} />
               </TouchableOpacity>
             )}
           </View>
 
           <View style={styles.tabsRow}>
             {[
-              { id: 'PRESENT', label: `Eligible for Lunch (${presentStudents.length})` },
-              { id: 'ABSENT',  label: `Absent / Locked (${absentStudents.length})` },
+              { id: 'PRESENT', label: `Eligible (${presentStudents.length})` },
+              { id: 'ABSENT',  label: `Locked (${absentStudents.length})` },
               { id: 'ALL',     label: `All (${students.length})` },
             ].map(tab => (
               <TouchableOpacity
@@ -278,7 +276,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                 style={[styles.tabPill, filterTab === tab.id && styles.tabPillActive]}
                 onPress={() => setFilterTab(tab.id)}
               >
-                <Text style={[styles.tabText, filterTab === tab.id && styles.tabTextActive]}>
+                <Text style={[styles.tabText, filterTab === tab.id && styles.tabTextActive]} numberOfLines={1}>
                   {tab.label}
                 </Text>
               </TouchableOpacity>
@@ -290,9 +288,9 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         <View style={styles.studentsList}>
           {filteredStudents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="restaurant-outline" size={36} color={COLORS.textLight} />
+              <Ionicons name="restaurant-outline" size={32} color={COLORS.textLight} />
               <Text style={styles.emptyStateText}>
-                {filterTab === 'ABSENT' ? 'No absent students today' : 'No students found matching search'}
+                {filterTab === 'ABSENT' ? 'No absent students today' : 'No students found'}
               </Text>
             </View>
           ) : (
@@ -315,29 +313,29 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
 
                   <View style={styles.infoCol}>
                     <View style={styles.nameRow}>
-                      <Text style={styles.studentName}>{st.name}</Text>
+                      <Text style={styles.studentName} numberOfLines={1}>{st.name}</Text>
                       <View style={styles.rollTag}>
-                        <Text style={styles.rollTagText}>Roll {st.rollNo}</Text>
+                        <Text style={styles.rollTagText}>#{st.rollNo}</Text>
                       </View>
                     </View>
-                    <Text style={styles.idText}>
+                    <Text style={styles.idText} numberOfLines={1}>
                       {st.id} · {st.gender === 'M' ? 'Male' : 'Female'}
                     </Text>
                   </View>
 
                   {isPresent ? (
                     <View style={[styles.statusBadge, styles.badgeGreen]}>
-                      <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-                      <Text style={[styles.statusText, { color: '#15803D' }]}>Eligible for Lunch</Text>
+                      <Ionicons name="checkmark-circle" size={11} color="#15803D" />
+                      <Text style={[styles.statusText, { color: '#15803D' }]}>Eligible</Text>
                     </View>
                   ) : isAbsent ? (
                     <View style={[styles.statusBadge, styles.badgeRed]}>
-                      <Ionicons name="close-circle" size={12} color="#DC2626" />
-                      <Text style={[styles.statusText, { color: '#DC2626' }]}>Absent (Locked)</Text>
+                      <Ionicons name="close-circle" size={11} color="#DC2626" />
+                      <Text style={[styles.statusText, { color: '#DC2626' }]}>Locked</Text>
                     </View>
                   ) : (
                     <View style={[styles.statusBadge, styles.badgeGrey]}>
-                      <Ionicons name="remove-circle-outline" size={12} color={COLORS.textMedium} />
+                      <Ionicons name="remove-circle-outline" size={11} color={COLORS.textMedium} />
                       <Text style={[styles.statusText, { color: COLORS.textMedium }]}>Pending</Text>
                     </View>
                   )}
@@ -347,7 +345,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
           )}
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 70 }} />
       </ScrollView>
 
       {/* Discrepancy Modal */}
@@ -360,20 +358,20 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalEyebrow}>LEAKAGE PREVENTION AUDIT</Text>
-                <Text style={styles.modalTitle}>Locked Absent Students</Text>
-                <Text style={styles.modalSub}>Excluded from lunch based on morning attendance</Text>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.modalEyebrow}>AUDIT REVIEW</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>Locked Students</Text>
+                <Text style={styles.modalSub} numberOfLines={1}>Excluded from lunch based on roll-call</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseIcon}
                 onPress={() => setShowDiscrepancyModal(false)}
               >
-                <Ionicons name="close" size={20} color={COLORS.textDark} />
+                <Ionicons name="close" size={18} color={COLORS.textDark} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
               {FLAGGED_STUDENTS.map((st) => {
                 const isResolved = !!resolvedStudents[st.id];
                 return (
@@ -382,9 +380,9 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                       <View style={[styles.flaggedAvatar, isResolved && styles.flaggedAvatarResolved]}>
                         <Text style={[styles.flaggedAvatarText, isResolved && { color: '#15803D' }]}>{st.rollNo}</Text>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.flaggedName}>{st.name}</Text>
-                        <Text style={styles.flaggedRoll}>Roll {st.rollNo} · ID: {st.id}</Text>
+                      <View style={{ flex: 1, marginRight: 6 }}>
+                        <Text style={styles.flaggedName} numberOfLines={1}>{st.name}</Text>
+                        <Text style={styles.flaggedRoll} numberOfLines={1}>Roll {st.rollNo} · {st.id}</Text>
                       </View>
                       <View style={isResolved ? styles.badgeResolved : styles.badgeUnresolved}>
                         <Text style={isResolved ? styles.textResolved : styles.textUnresolved}>
@@ -399,11 +397,11 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                     >
                       <Ionicons
                         name={isResolved ? 'arrow-undo' : 'checkmark-circle-outline'}
-                        size={13}
+                        size={12}
                         color={isResolved ? COLORS.textDark : COLORS.white}
                       />
                       <Text style={[styles.resolveBtnText, isResolved && { color: COLORS.textDark }]}>
-                        {isResolved ? 'Re-lock Meal Entitlement' : 'Override / Mark Present for Lunch'}
+                        {isResolved ? 'Re-lock Meal Entitlement' : 'Override / Mark Present'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -438,95 +436,134 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: COLORS.gold,
   },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  backBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.white },
-  navTitleWrap: { alignItems: 'center' },
-  navEyebrow: { fontSize: 8.5, fontWeight: '800', color: COLORS.goldLight, letterSpacing: 0.8, marginBottom: 1 },
-  navTitleText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingRight: 4,
+  },
+  backBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  navTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
+  navTitleText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  navEyebrow: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: COLORS.goldLight,
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
   statusPillLive: { backgroundColor: '#DCFCE7' },
   statusPillPending: { backgroundColor: '#FEF3C7' },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusPillText: { fontSize: 10, fontWeight: '800' },
-  content: { padding: SIZES.paddingMd, backgroundColor: COLORS.background },
+  statusDot: { width: 5, height: 5, borderRadius: 2.5 },
+  statusPillText: { fontSize: 9.5, fontWeight: '800' },
+  content: {
+    padding: SIZES.paddingMd,
+    paddingBottom: 70,
+    backgroundColor: COLORS.background,
+  },
 
   // Summary Card
   summaryCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: COLORS.gold,
-    padding: 16,
-    marginBottom: 16,
-    ...SHADOWS.md,
+    padding: 12,
+    marginBottom: 12,
+    ...SHADOWS.sm,
   },
   summaryTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
+    gap: 10,
+    marginBottom: 10,
   },
   summaryIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: COLORS.goldPale,
     borderWidth: 1,
     borderColor: COLORS.goldLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  summaryInfoCol: {
+    flex: 1,
+    marginRight: 6,
+  },
   summaryEyebrow: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
     color: COLORS.goldDark,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   summaryTitle: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: COLORS.textDark,
   },
   summarySub: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '500',
     color: COLORS.textMedium,
     marginTop: 1,
   },
   summaryCountBadge: {
     backgroundColor: COLORS.primaryPale,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#C2DEC9',
+    minWidth: 54,
   },
   summaryCountNum: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
     color: COLORS.primary,
   },
   summaryCountLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '800',
     color: COLORS.primaryLight,
   },
   summaryStatsRow: {
     flexDirection: 'row',
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginBottom: 10,
   },
   summaryStatBox: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
   },
   summaryStatNum: {
     fontSize: 16,
@@ -535,77 +572,75 @@ const styles = StyleSheet.create({
   },
   summaryStatLabel: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.textMedium,
-    textAlign: 'center',
-    lineHeight: 13,
+    marginTop: 1,
   },
   summaryStatDivider: {
     width: 1,
+    height: 20,
     backgroundColor: COLORS.borderLight,
-    marginVertical: 4,
   },
   verifiedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BBF7D0',
   },
   verifiedText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#166534',
     flex: 1,
-    lineHeight: 15,
   },
   noDataBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFBEB',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
   noDataText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#92400E',
     flex: 1,
   },
 
   // Section Headers
-  sectionHeader: { marginBottom: 10, marginTop: 4 },
-  sectionEyebrow: { fontSize: 9.5, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textDark },
-  sectionSub: { fontSize: 11.5, fontWeight: '500', color: COLORS.textMedium, marginTop: 2 },
+  sectionHeader: { marginBottom: 8, marginTop: 4 },
+  sectionEyebrow: { fontSize: 9, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textDark },
 
   // Audit Card
-  auditCard: { backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 16, ...SHADOWS.sm },
+  auditCard: { backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12, ...SHADOWS.sm },
   auditCardWarn: { borderColor: '#FCA5A5', backgroundColor: '#FEF8F8' },
   auditCardClean: { borderColor: '#86EFAC', backgroundColor: '#F7FCF9' },
-  auditTop: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  auditTitle: { fontSize: 13.5, fontWeight: '800', color: COLORS.textDark },
-  auditSub: { fontSize: 11.5, color: COLORS.textMedium, marginTop: 2, lineHeight: 16 },
-  inspectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#DC2626', paddingVertical: 9, borderRadius: 8, marginTop: 12 },
-  inspectBtnText: { fontSize: 12, fontWeight: '800', color: COLORS.white },
+  auditTop: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  auditInfoCol: { flex: 1 },
+  auditTitle: { fontSize: 13, fontWeight: '800', color: COLORS.textDark },
+  auditSub: { fontSize: 11, color: COLORS.textMedium, marginTop: 2, lineHeight: 15 },
+  inspectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#DC2626', paddingVertical: 8, borderRadius: 6, marginTop: 10 },
+  inspectBtnText: { fontSize: 11.5, fontWeight: '800', color: COLORS.white },
 
   // Filter Card
   filterCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 10,
-    marginBottom: 12,
+    padding: 8,
+    marginBottom: 10,
     ...SHADOWS.sm,
   },
   searchBar: {
@@ -614,19 +649,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAF8',
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 36,
-    gap: 8,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    height: 34,
+    gap: 6,
     marginBottom: 8,
   },
-  searchInput: { flex: 1, fontSize: 12, color: COLORS.textDark },
+  searchInput: { flex: 1, fontSize: 12, color: COLORS.textDark, padding: 0 },
   tabsRow: { flexDirection: 'row', gap: 6 },
   tabPill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: 8,
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
     backgroundColor: COLORS.creamCard,
     borderWidth: 1,
     borderColor: COLORS.creamBorder,
@@ -636,9 +672,9 @@ const styles = StyleSheet.create({
   tabTextActive: { color: COLORS.white },
 
   // Students List
-  studentsList: { gap: 8 },
-  emptyState: { alignItems: 'center', paddingVertical: 28, gap: 8 },
-  emptyStateText: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
+  studentsList: { gap: 6 },
+  emptyState: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  emptyStateText: { fontSize: 12, fontWeight: '600', color: COLORS.textLight },
   studentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -647,32 +683,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     padding: 10,
-    gap: 10,
+    gap: 8,
     ...SHADOWS.sm,
   },
   studentRowPresent: { borderColor: '#86EFAC', backgroundColor: '#FAFDFB' },
   studentRowAbsent: { borderColor: '#FCA5A5', backgroundColor: '#FEF8F8' },
-  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
-  infoCol: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  studentName: { fontSize: 13, fontWeight: '700', color: COLORS.textDark },
+  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 12, fontWeight: '800', color: COLORS.white },
+  infoCol: { flex: 1, marginRight: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  studentName: { fontSize: 13, fontWeight: '700', color: COLORS.textDark, flexShrink: 1 },
   rollTag: { backgroundColor: COLORS.primaryPale, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: '#C2DEC9' },
-  rollTagText: { fontSize: 10, fontWeight: '700', color: COLORS.primaryLight },
-  idText: { fontSize: 10, color: COLORS.textLight, marginTop: 2 },
+  rollTagText: { fontSize: 9.5, fontWeight: '800', color: COLORS.primaryLight },
+  idText: { fontSize: 10, color: COLORS.textLight, marginTop: 1 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
     borderRadius: 6,
     borderWidth: 1,
   },
   badgeGreen: { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' },
   badgeRed: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
   badgeGrey: { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' },
-  statusText: { fontSize: 10.5, fontWeight: '700' },
+  statusText: { fontSize: 10, fontWeight: '700' },
 
   // Discrepancy Modal
   modalOverlay: {
@@ -683,30 +719,30 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 18,
-    maxHeight: 520,
+    borderRadius: 14,
+    padding: 16,
+    maxHeight: 500,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
+    alignItems: 'center',
+    marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.divider,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
-  modalEyebrow: { fontSize: 9, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textDark },
-  modalSub: { fontSize: 11.5, color: COLORS.textLight, marginTop: 2 },
-  modalCloseIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.creamCard, alignItems: 'center', justifyContent: 'center' },
+  modalEyebrow: { fontSize: 8.5, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 1 },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textDark },
+  modalSub: { fontSize: 11, color: COLORS.textLight, marginTop: 1 },
+  modalCloseIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.creamCard, alignItems: 'center', justifyContent: 'center' },
   flaggedCard: {
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FCA5A5',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
   },
   flaggedResolved: {
     backgroundColor: '#F0FDF4',
@@ -715,47 +751,47 @@ const styles = StyleSheet.create({
   flaggedTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 6,
   },
-  flaggedAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
+  flaggedAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
   flaggedAvatarResolved: { backgroundColor: '#DCFCE7' },
-  flaggedAvatarText: { fontSize: 12, fontWeight: '800', color: '#DC2626' },
-  flaggedName: { fontSize: 13, fontWeight: '700', color: COLORS.textDark },
-  flaggedRoll: { fontSize: 10, color: COLORS.textMedium },
+  flaggedAvatarText: { fontSize: 11, fontWeight: '800', color: '#DC2626' },
+  flaggedName: { fontSize: 12.5, fontWeight: '700', color: COLORS.textDark },
+  flaggedRoll: { fontSize: 9.5, color: COLORS.textMedium },
   badgeUnresolved: {
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  textUnresolved: { fontSize: 10, fontWeight: '800', color: '#DC2626' },
+  textUnresolved: { fontSize: 9, fontWeight: '800', color: '#DC2626' },
   badgeResolved: {
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 6,
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  textResolved: { fontSize: 10, fontWeight: '800', color: '#15803D' },
-  flaggedReason: { fontSize: 11.5, color: '#7F1D1D', marginBottom: 8, lineHeight: 16 },
+  textResolved: { fontSize: 9, fontWeight: '800', color: '#15803D' },
+  flaggedReason: { fontSize: 11, color: '#7F1D1D', marginBottom: 6, lineHeight: 15 },
   resolveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: COLORS.primaryDark,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 5,
     alignSelf: 'flex-start',
   },
   resolveBtnUndo: { backgroundColor: '#E2E8F0' },
-  resolveBtnText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
+  resolveBtnText: { fontSize: 9.5, fontWeight: '700', color: COLORS.white },
   modalCloseBtn: {
     backgroundColor: COLORS.primaryDark,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
   },
-  modalCloseBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
+  modalCloseBtnText: { fontSize: 12.5, fontWeight: '800', color: COLORS.white },
 });
