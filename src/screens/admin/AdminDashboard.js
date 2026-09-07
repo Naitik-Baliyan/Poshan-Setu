@@ -294,7 +294,7 @@ export default function AdminDashboard({ route, navigation }) {
         {/* ========================================================= */}
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionEyebrow}>DINING HALL TELEMETRY</Text>
+            <Text style={styles.sectionEyebrow}>LUNCH ALLOCATION</Text>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="restaurant" size={17} color={COLORS.goldDark} />
               <Text style={styles.sectionTitle}>Today's Mid-Day Meal Distribution</Text>
@@ -302,9 +302,7 @@ export default function AdminDashboard({ route, navigation }) {
           </View>
           <View style={styles.liveCounterBadge}>
             <View style={styles.liveGreenDot} />
-            <Text style={styles.liveCounterBadgeText}>
-              {telemetryOnline ? 'CAM-01 ACTIVE' : 'COUNTER ONLINE'}
-            </Text>
+            <Text style={styles.liveCounterBadgeText}>ATTENDANCE SYNCED</Text>
           </View>
         </View>
 
@@ -313,7 +311,6 @@ export default function AdminDashboard({ route, navigation }) {
           onPress={() => navigation.navigate('AdminMealDistribution', {
             targetMeals: targetMeals,
             attendanceRecord: attendanceRecords['8C'],
-            mealsServed: mealsServed,
           })}
           activeOpacity={0.88}
         >
@@ -322,17 +319,17 @@ export default function AdminDashboard({ route, navigation }) {
               <Ionicons name="restaurant" size={24} color={COLORS.goldDark} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.mealCardTitle}>Dining Hall QR Monitor</Text>
-              <Text style={styles.mealCardSub}>Class 8C · Meena Devi · Counter 1</Text>
+              <Text style={styles.mealCardTitle}>Today's Lunch Beneficiaries</Text>
+              <Text style={styles.mealCardSub}>Class 8C · Verified from morning attendance</Text>
             </View>
             <View style={styles.mealPillBadge}>
-              <Text style={styles.mealPillNum}>{mealsServed}</Text>
-              <Text style={styles.mealPillTotal}>/ {targetMeals} EXPECTED</Text>
+              <Text style={styles.mealPillNum}>{targetMeals}</Text>
+              <Text style={styles.mealPillTotal}>STUDENTS ELIGIBLE</Text>
             </View>
           </View>
 
           <View style={styles.openMealScreenBtn}>
-            <Text style={styles.openMealScreenBtnText}>Open Meal Distribution Monitor</Text>
+            <Text style={styles.openMealScreenBtnText}>View Today's Lunch List</Text>
             <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
           </View>
         </TouchableOpacity>

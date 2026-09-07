@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { STUDENTS_BY_CLASS } from '../../data/mockData';
 import { fetchAttendanceRecords, subscribeToRealtimeAttendance } from '../../services/supabaseService';
-import LiveCameraFeed from '../../components/LiveCameraFeed';
 
 const getInitials = (name) => {
   if (!name) return '--';
@@ -34,57 +33,44 @@ const getAvatarColor = (rollNo) => {
 };
 
 export default function AdminMealDistributionScreen({ route, navigation }) {
-  const targetMealsParam = route?.params?.targetMeals;
   const attendanceRecordParam = route?.params?.attendanceRecord;
 
   const [liveRecord, setLiveRecord] = useState(attendanceRecordParam || null);
-  const [mealsServed, setMealsServed] = useState(route?.params?.mealsServed || 0);
-  const [servedRolls, setServedRolls] = useState([]);
   const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false);
   const [resolvedStudents, setResolvedStudents] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTab, setFilterTab] = useState('ALL');
-  const [cameraOnline, setCameraOnline] = useState(false);
-  const [lastCamSync, setLastCamSync] = useState(null);
+  const [filterTab, setFilterTab] = useState('PRESENT');
 
   const students = useMemo(() => STUDENTS_BY_CLASS['8C'] || [], []);
-  const targetMeals = liveRecord?.presentCount ?? targetMealsParam ?? 0;
 
   const attMap = liveRecord?.attendanceMap || liveRecord?.attendance_map || {};
   const isSubmitted = Object.keys(attMap).some(k => !k.startsWith('_'));
 
-  // Discrepancy list: dynamically populated from all students marked 'A' by teacher
+  const presentStudents = useMemo(() =>
+    students.filter(s => attMap[s.id] === 'P'), [students, attMap]
+  );
+  const absentStudents = useMemo(() =>
+    students.filter(s => attMap[s.id] === 'A'), [students, attMap]
+  );
+
+  const eligibleCount = isSubmitted ? presentStudents.length : (liveRecord?.presentCount ?? 0);
+
+  // Absent students whose meal entitlement is locked by system
   const FLAGGED_STUDENTS = useMemo(() => {
     if (!isSubmitted) return [];
-    return students
-      .filter((s) => attMap[s.id] === 'A')
-      .map((s) => ({
-        id: s.id,
-        rollNo: s.rollNo,
-        name: s.name,
-        gender: s.gender,
-        reason: s.rollNo === '18'
-          ? 'Student marked ABSENT in classroom roll-call, but attempted meal claim'
-          : 'Student marked ABSENT in classroom roll-call · Entitlement locked',
-        confidence: '98% Variance Alert',
-      }));
-  }, [students, attMap, isSubmitted]);
+    return absentStudents.map(s => ({
+      id: s.id,
+      rollNo: s.rollNo,
+      name: s.name,
+      gender: s.gender,
+      reason: 'Marked ABSENT in morning roll-call · Meal entitlement locked by system',
+    }));
+  }, [absentStudents, isSubmitted]);
 
-  const activeFlagCount = FLAGGED_STUDENTS.filter((s) => !resolvedStudents[s.id]).length;
+  const activeFlagCount = FLAGGED_STUDENTS.filter(s => !resolvedStudents[s.id]).length;
 
   const toggleStudentResolution = (id) => {
-    setResolvedStudents((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const handleIncrementMeal = () => {
-    if (mealsServed < targetMeals) setMealsServed(prev => prev + 1);
-  };
-
-  const handleDecrementMeal = () => {
-    if (mealsServed > 0) setMealsServed(prev => prev - 1);
+    setResolvedStudents(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Sync with Supabase cloud
@@ -92,73 +78,33 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
     try {
       const records = await fetchAttendanceRecords();
       const c8 = records?.['8C'];
-      if (c8) {
-        setLiveRecord(c8);
-        const curMap = c8.attendanceMap || c8.attendance_map || {};
-        if (Array.isArray(curMap._served_rolls)) {
-          setServedRolls(Array.from(new Set(curMap._served_rolls)));
-          setMealsServed(curMap._served_rolls.length);
-        }
-      }
+      if (c8) setLiveRecord(c8);
     } catch (e) {}
   }, []);
 
   useEffect(() => {
     fetchCloudRecords();
     const unsubRealtime = subscribeToRealtimeAttendance(fetchCloudRecords);
-
-    const telemetryInterval = setInterval(async () => {
-      const hosts = ['192.168.1.6:5050', 'localhost:5050'];
-      for (const h of hosts) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1200);
-          const res = await fetch(`http://${h}/status`, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            const data = await res.json();
-            setCameraOnline(true);
-            setLastCamSync(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
-            if (data.served_rolls?.length > 0) {
-              setServedRolls(prev => Array.from(new Set([...prev, ...data.served_rolls])));
-            }
-            if (typeof data.total_served === 'number' && data.total_served > 0) {
-              setMealsServed(data.total_served);
-            }
-            break;
-          }
-        } catch (e) {
-          setCameraOnline(false);
-        }
-      }
-    }, 1500);
-
+    const pollInterval = setInterval(fetchCloudRecords, 4000);
     return () => {
       if (unsubRealtime) unsubRealtime();
-      clearInterval(telemetryInterval);
+      clearInterval(pollInterval);
     };
   }, [fetchCloudRecords]);
 
   const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const isServed = servedRolls.includes(s.rollNo);
-      const isAbsent = attMap[s.id] === 'A';
-      const isFlagged = isAbsent;
+    let base = students;
+    if (filterTab === 'PRESENT') base = presentStudents;
+    else if (filterTab === 'ABSENT') base = absentStudents;
 
-      if (filterTab === 'SERVED' && !isServed) return false;
-      if (filterTab === 'WAITING' && (isServed || isAbsent)) return false;
-      if (filterTab === 'FLAGGED' && !isFlagged) return false;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        return s.name.toLowerCase().includes(q) || s.rollNo.includes(q) || s.id.toLowerCase().includes(q);
-      }
-      return true;
-    });
-  }, [students, searchQuery, filterTab, servedRolls, attMap]);
-
-  const servingPercent = Math.min(100, (mealsServed / (targetMeals || 1)) * 100);
-  const remaining = Math.max(0, targetMeals - mealsServed);
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.toLowerCase().trim();
+    return base.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      s.rollNo.includes(q) ||
+      s.id.toLowerCase().includes(q)
+    );
+  }, [students, presentStudents, absentStudents, searchQuery, filterTab]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -176,100 +122,75 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <View style={styles.navTitleWrap}>
-          <Text style={styles.navEyebrow}>DINING HALL TELEMETRY</Text>
-          <Text style={styles.navTitleText}>Meal Distribution</Text>
+          <Text style={styles.navEyebrow}>MID-DAY MEAL SCHEME</Text>
+          <Text style={styles.navTitleText}>Today's Lunch Distribution</Text>
         </View>
 
-        <View style={[styles.statusPill, cameraOnline ? styles.statusPillLive : styles.statusPillCloud]}>
-          <View style={[styles.statusDot, { backgroundColor: cameraOnline ? '#15803D' : '#D97706' }]} />
-          <Text style={[styles.statusPillText, { color: cameraOnline ? '#15803D' : '#92400E' }]}>
-            {cameraOnline ? 'LIVE' : 'CLOUD'}
+        <View style={[styles.statusPill, isSubmitted ? styles.statusPillLive : styles.statusPillPending]}>
+          <View style={[styles.statusDot, { backgroundColor: isSubmitted ? '#15803D' : '#D97706' }]} />
+          <Text style={[styles.statusPillText, { color: isSubmitted ? '#15803D' : '#92400E' }]}>
+            {isSubmitted ? 'VERIFIED' : 'PENDING'}
           </Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* ── Section 1: Serving Operations ─────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>SERVING OPERATIONS</Text>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="restaurant" size={17} color={COLORS.goldDark} />
-            <Text style={styles.sectionTitle}>Lunch Serving Progress</Text>
-          </View>
-          <Text style={styles.sectionSub}>Supervisor: Meena Devi · Dining Counter 1</Text>
-        </View>
-
-        <View style={styles.commandCard}>
-          <View style={styles.commandTopRow}>
-            <View style={styles.mealCountBlock}>
-              <Text style={styles.mealCountNum}>{mealsServed}</Text>
-              <Text style={styles.mealCountDenom}>/ {targetMeals}</Text>
-              <Text style={styles.mealCountLabel}>MEALS SERVED</Text>
+        {/* ── Summary Card ─────────────────────────────── */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTop}>
+            <View style={styles.summaryIconCircle}>
+              <Ionicons name="restaurant" size={24} color={COLORS.goldDark} />
             </View>
-            <View style={styles.mealStatsCol}>
-              <View style={styles.mealStatRow}>
-                <Ionicons name="hourglass-outline" size={13} color={COLORS.textMedium} />
-                <Text style={styles.mealStatText}>{remaining} plates remaining</Text>
-              </View>
-              <View style={styles.mealStatRow}>
-                <Ionicons name="people-outline" size={13} color={COLORS.textMedium} />
-                <Text style={styles.mealStatText}>{targetMeals} eligible beneficiaries</Text>
-              </View>
-              {cameraOnline && lastCamSync && (
-                <View style={styles.mealStatRow}>
-                  <Ionicons name="camera-outline" size={13} color={COLORS.present} />
-                  <Text style={[styles.mealStatText, { color: COLORS.present }]}>
-                    CAM-01 synced {lastCamSync}
-                  </Text>
-                </View>
-              )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.summaryEyebrow}>ATTENDANCE-BASED ALLOCATION</Text>
+              <Text style={styles.summaryTitle}>Lunch Beneficiaries</Text>
+              <Text style={styles.summarySub}>Class 8C · Verified morning roll-call</Text>
+            </View>
+            <View style={styles.summaryCountBadge}>
+              <Text style={styles.summaryCountNum}>{eligibleCount}</Text>
+              <Text style={styles.summaryCountLabel}>ELIGIBLE</Text>
             </View>
           </View>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${servingPercent}%` }]} />
-          </View>
-          <View style={styles.progressLabels}>
-            <Text style={styles.progressPct}>{Math.round(servingPercent)}% complete</Text>
-            <Text style={styles.progressRemain}>{remaining} left</Text>
-          </View>
-
-          <View style={styles.stepperRow}>
-            <Text style={styles.stepperLabel}>Manual Override</Text>
-            <View style={styles.stepperGroup}>
-              <TouchableOpacity style={styles.stepperBtn} onPress={handleDecrementMeal} activeOpacity={0.7}>
-                <Ionicons name="remove" size={18} color={COLORS.textDark} />
-              </TouchableOpacity>
-              <Text style={styles.stepperVal}>{mealsServed}</Text>
-              <TouchableOpacity style={[styles.stepperBtn, styles.stepperBtnPrimary]} onPress={handleIncrementMeal} activeOpacity={0.7}>
-                <Ionicons name="add" size={18} color={COLORS.white} />
-              </TouchableOpacity>
+          <View style={styles.summaryStatsRow}>
+            <View style={styles.summaryStatBox}>
+              <Ionicons name="checkmark-circle" size={18} color={COLORS.present} />
+              <Text style={[styles.summaryStatNum, { color: COLORS.present }]}>{presentStudents.length}</Text>
+              <Text style={styles.summaryStatLabel}>Present{'\n'}(Eligible)</Text>
+            </View>
+            <View style={styles.summaryStatDivider} />
+            <View style={styles.summaryStatBox}>
+              <Ionicons name="close-circle" size={18} color={COLORS.absent} />
+              <Text style={[styles.summaryStatNum, { color: COLORS.absent }]}>{absentStudents.length}</Text>
+              <Text style={styles.summaryStatLabel}>Absent{'\n'}(Locked)</Text>
+            </View>
+            <View style={styles.summaryStatDivider} />
+            <View style={styles.summaryStatBox}>
+              <Ionicons name="people" size={18} color={COLORS.primaryDark} />
+              <Text style={styles.summaryStatNum}>{students.length}</Text>
+              <Text style={styles.summaryStatLabel}>Total{'\n'}Enrolled</Text>
             </View>
           </View>
+
+          {isSubmitted ? (
+            <View style={styles.verifiedBanner}>
+              <Ionicons name="shield-checkmark" size={14} color={COLORS.present} />
+              <Text style={styles.verifiedText}>
+                Automated Entitlement Active · Only verified present students receive lunch today
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.noDataBanner}>
+              <Ionicons name="hourglass-outline" size={14} color={COLORS.goldDark} />
+              <Text style={styles.noDataText}>Awaiting morning roll-call submission from Class Teacher</Text>
+            </View>
+          )}
         </View>
 
-        {/* ── Section 2: Camera Feed ─────────────────────── */}
+        {/* ── Discrepancy & Entitlement Audit ─────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>AI VISION TERMINAL</Text>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="videocam" size={17} color={COLORS.primaryDark} />
-            <Text style={styles.sectionTitle}>Dining Hall CAM-01 Feed</Text>
-          </View>
-          <Text style={styles.sectionSub}>Laptop Webcam · QR Scanner · Real-time</Text>
-        </View>
-
-        <LiveCameraFeed
-          cameraHost="192.168.1.6:5050"
-          title="Dining Hall AI Vision Terminal"
-          subtitle="Unit CAM-01 · Laptop Webcam & QR Scanner"
-          detectedCount={targetMeals}
-          showDiscrepancy={activeFlagCount > 0}
-        />
-
-        {/* ── Section 3: Discrepancy Audit ─────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>ENTITLEMENT AUDIT</Text>
+          <Text style={styles.sectionEyebrow}>LEAKAGE PREVENTION</Text>
           <View style={styles.sectionTitleRow}>
             <Ionicons
               name="shield-checkmark"
@@ -277,7 +198,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
               color={activeFlagCount > 0 ? '#DC2626' : COLORS.present}
             />
             <Text style={styles.sectionTitle}>
-              {activeFlagCount > 0 ? 'Attendance vs. Meal Variance' : 'Integrity Check'}
+              {activeFlagCount > 0 ? 'Entitlement Lockdown Active' : 'Integrity Check Passed'}
             </Text>
           </View>
         </View>
@@ -292,12 +213,12 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             <View style={{ flex: 1 }}>
               <Text style={styles.auditTitle}>
                 {activeFlagCount > 0
-                  ? `${activeFlagCount} student${activeFlagCount > 1 ? 's' : ''} flagged for variance`
+                  ? `${activeFlagCount} absent student${activeFlagCount > 1 ? 's' : ''} locked from lunch`
                   : 'Zero Discrepancies · Complete Integrity'}
               </Text>
               <Text style={styles.auditSub}>
                 {activeFlagCount > 0
-                  ? 'Marked ABSENT in roll-call — meal entitlement locked by system'
+                  ? 'System automatically blocks meal entitlement for absent students to eliminate ghost beneficiaries.'
                   : 'Every meal plate matches verified morning attendance perfectly.'}
               </Text>
             </View>
@@ -311,21 +232,21 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             >
               <Ionicons name="search-outline" size={14} color={COLORS.white} />
               <Text style={styles.inspectBtnText}>
-                Inspect {activeFlagCount} Flagged Beneficiar{activeFlagCount > 1 ? 'ies' : 'y'}
+                Review {activeFlagCount} Locked Absent Student{activeFlagCount > 1 ? 's' : ''}
               </Text>
               <Ionicons name="chevron-forward" size={14} color={COLORS.white} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* ── Section 4: Student Roster ──────────────────── */}
+        {/* ── Today's Lunch List ──────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionEyebrow}>BENEFICIARY VERIFICATION</Text>
+          <Text style={styles.sectionEyebrow}>TODAY'S LUNCH LIST</Text>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="list" size={17} color={COLORS.primaryDark} />
-            <Text style={styles.sectionTitle}>Meal Verification Feed</Text>
+            <Ionicons name="people" size={17} color={COLORS.primaryDark} />
+            <Text style={styles.sectionTitle}>Students Having Lunch Today</Text>
           </View>
-          <Text style={styles.sectionSub}>Real-time authentication records from CAM-01</Text>
+          <Text style={styles.sectionSub}>Derived directly from verified morning attendance</Text>
         </View>
 
         {/* Search & Tabs */}
@@ -334,20 +255,24 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             <Ionicons name="search-outline" size={15} color={COLORS.textLight} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search student by name, roll no, or ID..."
+              placeholder="Search by name, roll no, or ID..."
               placeholderTextColor={COLORS.textLight}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={15} color={COLORS.textLight} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.tabsRow}>
             {[
-              { id: 'ALL', label: `All (${students.length})` },
-              { id: 'SERVED', label: `Served (${servedRolls.length})` },
-              { id: 'WAITING', label: `Waiting (${Math.max(0, targetMeals - servedRolls.length)})` },
-              { id: 'FLAGGED', label: `Flagged (${activeFlagCount})` },
-            ].map((tab) => (
+              { id: 'PRESENT', label: `Eligible for Lunch (${presentStudents.length})` },
+              { id: 'ABSENT',  label: `Absent / Locked (${absentStudents.length})` },
+              { id: 'ALL',     label: `All (${students.length})` },
+            ].map(tab => (
               <TouchableOpacity
                 key={tab.id}
                 style={[styles.tabPill, filterTab === tab.id && styles.tabPillActive]}
@@ -365,21 +290,23 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
         <View style={styles.studentsList}>
           {filteredStudents.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="search" size={28} color={COLORS.textLight} />
-              <Text style={styles.emptyStateText}>No students match this filter</Text>
+              <Ionicons name="restaurant-outline" size={36} color={COLORS.textLight} />
+              <Text style={styles.emptyStateText}>
+                {filterTab === 'ABSENT' ? 'No absent students today' : 'No students found matching search'}
+              </Text>
             </View>
           ) : (
             filteredStudents.map((st) => {
-              const isServed = servedRolls.includes(st.rollNo);
               const isAbsent = attMap[st.id] === 'A';
+              const isPresent = attMap[st.id] === 'P';
 
               return (
                 <View
                   key={st.id}
                   style={[
                     styles.studentRow,
-                    isAbsent && styles.studentRowFlagged,
-                    isServed && !isAbsent && styles.studentRowServed,
+                    isAbsent && styles.studentRowAbsent,
+                    isPresent && styles.studentRowPresent,
                   ]}
                 >
                   <View style={[styles.avatar, { backgroundColor: getAvatarColor(st.rollNo) }]}>
@@ -394,24 +321,24 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                       </View>
                     </View>
                     <Text style={styles.idText}>
-                      ID: {st.id} · Class 8C · {st.gender === 'M' ? 'Male' : 'Female'}
+                      {st.id} · {st.gender === 'M' ? 'Male' : 'Female'}
                     </Text>
                   </View>
 
-                  {isAbsent ? (
-                    <View style={[styles.statusBadge, styles.badgeRed]}>
-                      <Ionicons name="alert-circle" size={11} color="#DC2626" />
-                      <Text style={[styles.statusText, { color: '#DC2626' }]}>Flagged</Text>
-                    </View>
-                  ) : isServed ? (
+                  {isPresent ? (
                     <View style={[styles.statusBadge, styles.badgeGreen]}>
-                      <Ionicons name="checkmark-circle" size={11} color="#15803D" />
-                      <Text style={[styles.statusText, { color: '#15803D' }]}>Served</Text>
+                      <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                      <Text style={[styles.statusText, { color: '#15803D' }]}>Eligible for Lunch</Text>
+                    </View>
+                  ) : isAbsent ? (
+                    <View style={[styles.statusBadge, styles.badgeRed]}>
+                      <Ionicons name="close-circle" size={12} color="#DC2626" />
+                      <Text style={[styles.statusText, { color: '#DC2626' }]}>Absent (Locked)</Text>
                     </View>
                   ) : (
                     <View style={[styles.statusBadge, styles.badgeGrey]}>
-                      <Ionicons name="time-outline" size={11} color={COLORS.textMedium} />
-                      <Text style={[styles.statusText, { color: COLORS.textMedium }]}>In Queue</Text>
+                      <Ionicons name="remove-circle-outline" size={12} color={COLORS.textMedium} />
+                      <Text style={[styles.statusText, { color: COLORS.textMedium }]}>Pending</Text>
                     </View>
                   )}
                 </View>
@@ -419,7 +346,8 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
             })
           )}
         </View>
-        <View style={{ height: 32 }} />
+
+        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Discrepancy Modal */}
@@ -433,9 +361,9 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalEyebrow}>ENTITLEMENT AUDIT REPORT</Text>
-                <Text style={styles.modalTitle}>Flagged Beneficiaries</Text>
-                <Text style={styles.modalSub}>Discrepancies detected at CAM-01 QR counter</Text>
+                <Text style={styles.modalEyebrow}>LEAKAGE PREVENTION AUDIT</Text>
+                <Text style={styles.modalTitle}>Locked Absent Students</Text>
+                <Text style={styles.modalSub}>Excluded from lunch based on morning attendance</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseIcon}
@@ -460,7 +388,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                       </View>
                       <View style={isResolved ? styles.badgeResolved : styles.badgeUnresolved}>
                         <Text style={isResolved ? styles.textResolved : styles.textUnresolved}>
-                          {isResolved ? 'Resolved' : 'Variance'}
+                          {isResolved ? 'Overridden' : 'Locked'}
                         </Text>
                       </View>
                     </View>
@@ -475,7 +403,7 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
                         color={isResolved ? COLORS.textDark : COLORS.white}
                       />
                       <Text style={[styles.resolveBtnText, isResolved && { color: COLORS.textDark }]}>
-                        {isResolved ? 'Undo Resolution' : 'Mark Excused / Verified'}
+                        {isResolved ? 'Re-lock Meal Entitlement' : 'Override / Mark Present for Lunch'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -517,55 +445,160 @@ const styles = StyleSheet.create({
   navTitleText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
   statusPillLive: { backgroundColor: '#DCFCE7' },
-  statusPillCloud: { backgroundColor: '#FEF3C7' },
+  statusPillPending: { backgroundColor: '#FEF3C7' },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusPillText: { fontSize: 10, fontWeight: '800' },
   content: { padding: SIZES.paddingMd, backgroundColor: COLORS.background },
 
-  // Section Headers
-  sectionHeader: { marginBottom: 10, marginTop: 8 },
-  sectionEyebrow: { fontSize: 9.5, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textDark },
-  sectionSub: { fontSize: 11.5, fontWeight: '500', color: COLORS.textMedium, marginTop: 2 },
-  // Command Card
-  commandCard: {
+  // Summary Card
+  summaryCard: {
     backgroundColor: COLORS.white,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold,
     padding: 16,
-    marginBottom: 18,
-    ...SHADOWS.sm,
+    marginBottom: 16,
+    ...SHADOWS.md,
   },
-  commandTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 12 },
-  mealCountBlock: { alignItems: 'flex-start' },
-  mealCountNum: { fontSize: 40, fontWeight: '900', color: COLORS.primaryDark, lineHeight: 44, letterSpacing: -1 },
-  mealCountDenom: { fontSize: 16, fontWeight: '700', color: COLORS.textMedium, marginTop: -4 },
-  mealCountLabel: { fontSize: 9.5, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginTop: 4 },
-  mealStatsCol: { flex: 1, gap: 5, paddingTop: 4 },
-  mealStatRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  mealStatText: { fontSize: 12, fontWeight: '600', color: COLORS.textMedium },
-  progressTrack: { height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden', marginBottom: 4 },
-  progressFill: { height: '100%', backgroundColor: '#16A34A', borderRadius: 4 },
-  progressLabels: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-  progressPct: { fontSize: 11, fontWeight: '700', color: COLORS.present },
-  progressRemain: { fontSize: 11, fontWeight: '600', color: COLORS.textLight },
-  stepperRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.divider },
-  stepperLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textMedium },
-  stepperGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  stepperBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  stepperBtnPrimary: { backgroundColor: COLORS.primaryDark },
-  stepperVal: { fontSize: 18, fontWeight: '900', color: COLORS.primaryDark, minWidth: 28, textAlign: 'center' },
+  summaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  summaryIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.goldPale,
+    borderWidth: 1,
+    borderColor: COLORS.goldLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryEyebrow: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.goldDark,
+    letterSpacing: 0.8,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  summarySub: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: COLORS.textMedium,
+    marginTop: 1,
+  },
+  summaryCountBadge: {
+    backgroundColor: COLORS.primaryPale,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#C2DEC9',
+  },
+  summaryCountNum: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.primary,
+  },
+  summaryCountLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.primaryLight,
+  },
+  summaryStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  summaryStatBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  summaryStatNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  summaryStatLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textMedium,
+    textAlign: 'center',
+    lineHeight: 13,
+  },
+  summaryStatDivider: {
+    width: 1,
+    backgroundColor: COLORS.borderLight,
+    marginVertical: 4,
+  },
+  verifiedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#166534',
+    flex: 1,
+    lineHeight: 15,
+  },
+  noDataBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  noDataText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400E',
+    flex: 1,
+  },
+
+  // Section Headers
+  sectionHeader: { marginBottom: 10, marginTop: 4 },
+  sectionEyebrow: { fontSize: 9.5, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textDark },
+  sectionSub: { fontSize: 11.5, fontWeight: '500', color: COLORS.textMedium, marginTop: 2 },
+
   // Audit Card
-  auditCard: { backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 18, ...SHADOWS.sm },
+  auditCard: { backgroundColor: COLORS.white, borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 16, ...SHADOWS.sm },
   auditCardWarn: { borderColor: '#FCA5A5', backgroundColor: '#FEF8F8' },
   auditCardClean: { borderColor: '#86EFAC', backgroundColor: '#F7FCF9' },
   auditTop: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  auditTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textDark },
+  auditTitle: { fontSize: 13.5, fontWeight: '800', color: COLORS.textDark },
   auditSub: { fontSize: 11.5, color: COLORS.textMedium, marginTop: 2, lineHeight: 16 },
   inspectBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#DC2626', paddingVertical: 9, borderRadius: 8, marginTop: 12 },
   inspectBtnText: { fontSize: 12, fontWeight: '800', color: COLORS.white },
+
+  // Filter Card
   filterCard: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
@@ -573,6 +606,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 10,
     marginBottom: 12,
+    ...SHADOWS.sm,
   },
   searchBar: {
     flexDirection: 'row',
@@ -589,22 +623,35 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 12, color: COLORS.textDark },
   tabsRow: { flexDirection: 'row', gap: 6 },
   tabPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 7,
+    borderRadius: 8,
     backgroundColor: COLORS.creamCard,
     borderWidth: 1,
     borderColor: COLORS.creamBorder,
   },
   tabPillActive: { backgroundColor: COLORS.primaryDark, borderColor: COLORS.primaryDark },
-  tabText: { fontSize: 10, fontWeight: '700', color: COLORS.textMedium },
+  tabText: { fontSize: 10.5, fontWeight: '700', color: COLORS.textMedium },
   tabTextActive: { color: COLORS.white },
+
+  // Students List
   studentsList: { gap: 8 },
   emptyState: { alignItems: 'center', paddingVertical: 28, gap: 8 },
   emptyStateText: { fontSize: 13, fontWeight: '600', color: COLORS.textLight },
-  studentRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 10, borderWidth: 1, borderColor: COLORS.borderLight, padding: 10, gap: 10, ...SHADOWS.sm },
-  studentRowServed: { borderColor: '#86EFAC', backgroundColor: '#F7FCF9' },
-  studentRowFlagged: { borderColor: '#FCA5A5', backgroundColor: '#FEF8F8' },
+  studentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10,
+    gap: 10,
+    ...SHADOWS.sm,
+  },
+  studentRowPresent: { borderColor: '#86EFAC', backgroundColor: '#FAFDFB' },
+  studentRowAbsent: { borderColor: '#FCA5A5', backgroundColor: '#FEF8F8' },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
   infoCol: { flex: 1 },
@@ -617,15 +664,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
   },
   badgeGreen: { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' },
   badgeRed: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
   badgeGrey: { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' },
-  statusText: { fontSize: 10, fontWeight: '700' },
+  statusText: { fontSize: 10.5, fontWeight: '700' },
+
+  // Discrepancy Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -638,7 +687,15 @@ const styles = StyleSheet.create({
     padding: 18,
     maxHeight: 520,
   },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider, paddingBottom: 12 },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    paddingBottom: 12,
+  },
   modalEyebrow: { fontSize: 9, fontWeight: '800', color: COLORS.goldDark, letterSpacing: 0.8, marginBottom: 2 },
   modalTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textDark },
   modalSub: { fontSize: 11.5, color: COLORS.textLight, marginTop: 2 },
