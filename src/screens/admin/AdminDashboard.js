@@ -7,12 +7,14 @@ import {
   StatusBar,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { SCHOOL_INFO, CLASSES_LIST } from '../../data/mockData';
 import { fetchAttendanceRecords, subscribeToRealtimeAttendance } from '../../services/supabaseService';
+import { generateDailyAuditPDF } from '../../services/pdfService';
 
 export default function AdminDashboard({ route, navigation }) {
   const admin = route.params?.admin || {
@@ -25,6 +27,8 @@ export default function AdminDashboard({ route, navigation }) {
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [mealsServed, setMealsServed] = useState(0);
   const [telemetryOnline, setTelemetryOnline] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [servedRolls, setServedRolls] = useState([]);
 
   const todayStr = useMemo(() => {
     return new Date().toLocaleDateString('en-IN', {
@@ -46,6 +50,7 @@ export default function AdminDashboard({ route, navigation }) {
       const attMap = c8?.attendanceMap || c8?.attendance_map;
       if (attMap?._served_rolls) {
         setMealsServed(attMap._served_rolls.length);
+        setServedRolls(attMap._served_rolls);
       }
     } catch (err) {
       console.log('Admin fetch error', err);
@@ -95,6 +100,27 @@ export default function AdminDashboard({ route, navigation }) {
         { text: 'Sign Out', style: 'destructive', onPress: () => navigation.replace('SelectRole') },
       ]
     );
+  };
+
+  const handleDownloadReport = async () => {
+    if (isGeneratingPDF) return;
+    setIsGeneratingPDF(true);
+    try {
+      await generateDailyAuditPDF({
+        attendanceRecords,
+        servedRolls,
+        adminInfo: admin,
+      });
+    } catch (err) {
+      console.log('PDF error', err);
+      Alert.alert(
+        'Export Failed',
+        'Could not generate the PDF. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   // Compute school stats strictly from real-time records
@@ -359,6 +385,71 @@ export default function AdminDashboard({ route, navigation }) {
             <Ionicons name="arrow-forward" size={15} color={COLORS.white} />
           </View>
         </TouchableOpacity>
+
+        {/* ========================================================= */}
+        {/* SECTION 4: DAILY AUDIT REPORT DOWNLOAD                   */}
+        {/* ========================================================= */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Text style={styles.sectionEyebrow}>COMPLIANCE</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="document-text" size={16} color={COLORS.primaryDark} />
+              <Text style={styles.sectionTitle} numberOfLines={1}>Daily Audit Report</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.auditReportCard}>
+          <View style={styles.auditReportTop}>
+            <View style={styles.auditIconWrap}>
+              <Ionicons name="document-text-outline" size={26} color={COLORS.primaryDark} />
+            </View>
+            <View style={styles.auditReportInfo}>
+              <Text style={styles.auditReportTitle}>PM-POSHAN Compliance Report</Text>
+              <Text style={styles.auditReportSub}>
+                Attendance · Meals Distributed · Discrepancies
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.auditStatsRow}>
+            <View style={styles.auditStat}>
+              <Text style={[styles.auditStatVal, { color: COLORS.primary }]}>{totalReportedPresent}</Text>
+              <Text style={styles.auditStatLabel}>Present</Text>
+            </View>
+            <View style={styles.auditStatDivider} />
+            <View style={styles.auditStat}>
+              <Text style={[styles.auditStatVal, { color: COLORS.goldDark }]}>{mealsServed}</Text>
+              <Text style={styles.auditStatLabel}>Meals</Text>
+            </View>
+            <View style={styles.auditStatDivider} />
+            <View style={styles.auditStat}>
+              <Text style={[styles.auditStatVal, { color: COLORS.present }]}>
+                {mealsServed === 0 ? '--' : Math.min(100, Math.round((mealsServed / Math.max(1, totalReportedPresent)) * 100)) + '%'}
+              </Text>
+              <Text style={styles.auditStatLabel}>Coverage</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.downloadBtn, isGeneratingPDF && styles.downloadBtnDisabled]}
+            onPress={handleDownloadReport}
+            activeOpacity={0.82}
+            disabled={isGeneratingPDF}
+          >
+            {isGeneratingPDF ? (
+              <>
+                <ActivityIndicator size="small" color={COLORS.white} />
+                <Text style={styles.downloadBtnText}>Generating PDF…</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={18} color={COLORS.white} />
+                <Text style={styles.downloadBtnText}>Download Daily Report (PDF)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <View style={{ height: 60 }} />
       </ScrollView>
@@ -789,4 +880,99 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     letterSpacing: 0.2,
   },
+
+  // ── Audit Report Card ──────────────────────────────────
+  auditReportCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: SIZES.radiusMd,
+    borderWidth: 1,
+    borderColor: COLORS.creamBorder,
+    marginHorizontal: SIZES.paddingMd,
+    marginBottom: 12,
+    padding: SIZES.paddingMd,
+    ...SHADOWS.sm,
+  },
+  auditReportTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  auditIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  auditReportInfo: {
+    flex: 1,
+  },
+  auditReportTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    marginBottom: 2,
+  },
+  auditReportSub: {
+    fontSize: 12,
+    color: COLORS.textMedium,
+    fontWeight: '500',
+  },
+  auditStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryPale,
+    borderRadius: SIZES.radiusSm,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  auditStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  auditStatVal: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  auditStatLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 2,
+  },
+  auditStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: COLORS.borderLight,
+  },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primaryDark,
+    paddingVertical: 14,
+    borderRadius: SIZES.radiusSm,
+    ...SHADOWS.sm,
+  },
+  downloadBtnDisabled: {
+    backgroundColor: COLORS.textMedium,
+    opacity: 0.7,
+  },
+  downloadBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.white,
+    letterSpacing: 0.3,
+  },
 });
+
