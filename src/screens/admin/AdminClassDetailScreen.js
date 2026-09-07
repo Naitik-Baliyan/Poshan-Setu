@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -37,10 +37,8 @@ const getAvatarColor = (roll) => {
 };
 
 export default function AdminClassDetailScreen({ route, navigation }) {
-  const { classInfo, attendanceRecord } = route.params || {
-    classInfo: { id: '8C', label: 'Class 8 - Section C', strength: 20 },
-    attendanceRecord: null,
-  };
+  const classInfo = route?.params?.classInfo || { id: '8C', label: 'Class 8 - Section C', strength: 20, grade: '8th' };
+  const attendanceRecord = route?.params?.attendanceRecord || null;
 
   const [liveRecord, setLiveRecord] = useState(attendanceRecord || null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,14 +150,14 @@ export default function AdminClassDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={[styles.statVal, { color: isSubmitted ? COLORS.present : COLORS.textSecondary }]}>
+              <Text style={[styles.statVal, { color: isSubmitted ? COLORS.present : COLORS.textMedium }]}>
                 {isSubmitted ? presentCount : 0}
               </Text>
               <Text style={styles.statLabel}>PRESENT</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCol}>
-              <Text style={[styles.statVal, { color: isSubmitted ? COLORS.absent : COLORS.textSecondary }]}>
+              <Text style={[styles.statVal, { color: isSubmitted ? COLORS.absent : COLORS.textMedium }]}>
                 {isSubmitted ? absentCount : 0}
               </Text>
               <Text style={styles.statLabel}>ABSENT</Text>
