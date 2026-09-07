@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "MealGuard",
-    "slug": "MealGuard",
+    "name": "PoshanSetu",
+    "slug": "poshansetu",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,15 +10,17 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.poshansetu.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#004D2C",
+        "foregroundImage": "./assets/icon.png"
       }
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

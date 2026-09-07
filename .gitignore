@@ -32,6 +32,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -39,3 +40,16 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated QR codes output (can be regenerated)
+qr_codes/
+
+# Claude / AI config
+.claude/
+AGENTS.md
+CLAUDE.md
