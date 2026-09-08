@@ -63,16 +63,22 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
     const set = new Set();
     const cloudRolls = attMap?._served_rolls || [];
     cloudRolls.forEach(r => {
-      set.add(String(r).trim());
-      set.add(String(r).padStart(2, '0'));
-      const parsed = parseInt(r, 10);
-      if (!isNaN(parsed)) set.add(String(parsed));
+      const str = String(r).trim();
+      if (str.length <= 10 && !str.includes('http') && !str.includes('://') && str !== 'INVALID') {
+        set.add(str);
+        set.add(str.padStart(2, '0'));
+        const parsed = parseInt(str, 10);
+        if (!isNaN(parsed)) set.add(String(parsed));
+      }
     });
     localServedRolls.forEach(r => {
-      set.add(String(r).trim());
-      set.add(String(r).padStart(2, '0'));
-      const parsed = parseInt(r, 10);
-      if (!isNaN(parsed)) set.add(String(parsed));
+      const str = String(r).trim();
+      if (str.length <= 10 && !str.includes('http') && !str.includes('://') && str !== 'INVALID') {
+        set.add(str);
+        set.add(str.padStart(2, '0'));
+        const parsed = parseInt(str, 10);
+        if (!isNaN(parsed)) set.add(String(parsed));
+      }
     });
     return set;
   }, [attMap, localServedRolls]);
@@ -258,15 +264,46 @@ export default function AdminMealDistributionScreen({ route, navigation }) {
 
           {/* Live Scanner Activity / Integrity Banner */}
           {lastScannedStudent ? (
-            <View style={styles.liveScanBanner}>
+            <View
+              style={[
+                styles.liveScanBanner,
+                lastScannedStudent.is_invalid && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+                lastScannedStudent.is_duplicate && { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+              ]}
+            >
               <Ionicons
-                name={lastScannedStudent.is_discrepancy ? "alert-circle" : "checkmark-circle"}
+                name={
+                  lastScannedStudent.is_invalid
+                    ? "shield-half"
+                    : lastScannedStudent.is_duplicate
+                    ? "warning"
+                    : lastScannedStudent.is_discrepancy
+                    ? "alert-circle"
+                    : "checkmark-circle"
+                }
                 size={14}
-                color={lastScannedStudent.is_discrepancy ? "#DC2626" : "#15803D"}
+                color={
+                  lastScannedStudent.is_invalid || lastScannedStudent.is_discrepancy
+                    ? "#DC2626"
+                    : lastScannedStudent.is_duplicate
+                    ? "#D97706"
+                    : "#15803D"
+                }
               />
-              <Text style={styles.liveScanText} numberOfLines={1}>
-                {lastScannedStudent.is_discrepancy
-                  ? `Flagged: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) is absent!`
+              <Text
+                style={[
+                  styles.liveScanText,
+                  (lastScannedStudent.is_invalid || lastScannedStudent.is_discrepancy) && { color: '#991B1B' },
+                  lastScannedStudent.is_duplicate && { color: '#92400E' },
+                ]}
+                numberOfLines={1}
+              >
+                {lastScannedStudent.is_invalid
+                  ? "Security Alert: Unregistered QR Code rejected! Access Denied."
+                  : lastScannedStudent.is_duplicate
+                  ? `Duplicate Attempt: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) already served!`
+                  : lastScannedStudent.is_discrepancy
+                  ? `Flagged: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) marked ABSENT!`
                   : `Just Verified: Roll ${lastScannedStudent.roll} (${lastScannedStudent.name}) · Meal Issued`}
               </Text>
             </View>

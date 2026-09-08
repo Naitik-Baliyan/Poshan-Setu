@@ -48,9 +48,13 @@ export default function AdminDashboard({ route, navigation }) {
       // Sync meal count from cloud
       const c8 = records?.['8C'];
       const attMap = c8?.attendanceMap || c8?.attendance_map;
-      if (attMap?._served_rolls) {
-        setMealsServed(attMap._served_rolls.length);
-        setServedRolls(attMap._served_rolls);
+      if (attMap?._served_rolls && Array.isArray(attMap._served_rolls)) {
+        const validRolls = attMap._served_rolls.filter(r => {
+          const s = String(r).trim();
+          return s.length <= 10 && !s.includes('http') && !s.includes('://') && s !== 'INVALID';
+        });
+        setMealsServed(validRolls.length);
+        setServedRolls(validRolls);
       }
     } catch (err) {
       console.log('Admin fetch error', err);

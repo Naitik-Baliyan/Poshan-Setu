@@ -8,26 +8,36 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 # Audio beep support for Windows
 try:
     import winsound
-    def play_beep(is_discrepancy=False):
+    def play_beep(sound_type="success"):
         def _sound():
             try:
-                if is_discrepancy:
+                if sound_type in ("alarm", "discrepancy"):
                     winsound.Beep(480, 160)
                     time.sleep(0.05)
                     winsound.Beep(360, 250)
-                else:
+                elif sound_type == "invalid":
+                    winsound.Beep(320, 180)
+                    time.sleep(0.04)
+                    winsound.Beep(260, 260)
+                elif sound_type == "duplicate":
+                    winsound.Beep(750, 100)
+                    time.sleep(0.06)
+                    winsound.Beep(750, 120)
+                else:  # success
                     winsound.Beep(1300, 140)
             except Exception:
                 pass
         threading.Thread(target=_sound, daemon=True).start()
 except ImportError:
-    def play_beep(is_discrepancy=False):
+    def play_beep(sound_type="success"):
         pass
 
 # ─────────────────────────────────────────────────────────────
 #  PoshanSetu QR Meal Authentication Engine (SIH 2026)
 #  • Fast OpenCV QR Detector with HUD Viewfinder
 #  • Anti-Fraud Verification against Morning Attendance Roster
+#  • Rejection of Unregistered / Random Foreign QR Codes
+#  • Duplicate Scan Prevention (No Double Dipping)
 #  • Real-time Audio Beep & Visual Status Feedback
 #  • Telemetry Sync API for Mobile Dashboard
 # ─────────────────────────────────────────────────────────────
@@ -98,8 +108,11 @@ threading.Thread(target=sync_attendance_from_cloud, daemon=True).start()
 app_state = {
     "served_students": set(),
     "last_scanned_student": None,
+    "last_scan_status": "NONE",  # 'VERIFIED' | 'DISCREPANCY' | 'DUPLICATE' | 'INVALID'
     "last_scan_time": 0,
     "last_scan_is_discrepancy": False,
+    "last_scan_is_invalid": False,
+    "last_scan_is_duplicate": False,
     "total_served": 0,
     "total_discrepancies": 0,
     "latest_jpeg": None,
@@ -107,7 +120,7 @@ app_state = {
 state_lock = threading.Lock()
 
 
-def sync_to_supabase(roll, name, is_discrepancy):
+def sync_to_supabase(roll, name, is_discrepancy, scan_status="VERIFIED"):
     def _worker():
         try:
             import urllib.request, json
@@ -126,13 +139,48 @@ def sync_to_supabase(roll, name, is_discrepancy):
                     att = rec.get('attendance_map') or {}
                     with state_lock:
                         served_list = list(app_state["served_students"])
+                    # Only valid served rolls count in _served_rolls
                     att["_served_rolls"] = served_list
                     att["_last_scan"] = {
                         "roll": roll,
                         "name": name,
                         "is_discrepancy": is_discrepancy,
+                        "is_invalid": (scan_status == "INVALID"),
+                        "is_duplicate": (scan_status == "DUPLICATE"),
+                        "status": scan_status,
                         "timestamp": time.time()
                     }
+                    body = json.dumps({
+                        "attendance_map": att,
+                        "timestamp": int(time.time() * 1000)
+                    }).encode()
+                    patch_req = urllib.request.Request(url, data=body, headers=headers, method='PATCH')
+                    with urllib.request.urlopen(patch_req, timeout=3) as p_resp:
+                        pass
+        except Exception:
+            pass
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def reset_supabase_served():
+    def _worker():
+        try:
+            import urllib.request, json
+            url = "https://cfwdgkxsybfgxlzazywy.supabase.co/rest/v1/attendance_records?id=eq.8C"
+            headers = {
+                'apikey': 'sb_publishable_n35XnEMidFODTwSNKeFYXQ_Yun9HALl',
+                'Authorization': 'Bearer sb_publishable_n35XnEMidFODTwSNKeFYXQ_Yun9HALl',
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            }
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                recs = json.loads(resp.read().decode())
+                if recs:
+                    rec = recs[0]
+                    att = rec.get('attendance_map') or {}
+                    att["_served_rolls"] = []
+                    att["_last_scan"] = None
                     body = json.dumps({
                         "attendance_map": att,
                         "timestamp": int(time.time() * 1000)
@@ -214,17 +262,31 @@ def draw_viewfinder(frame, h, w, is_scanning=False):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 220, 210), 1)
 
 
-def draw_confirmation_card(frame, h, w, student, is_discrepancy, is_duplicate=False):
-    card_h = 110
+def draw_confirmation_card(frame, h, w, student, scan_status="VERIFIED"):
+    card_h = 114
     card_y1 = h - FOOTER_H - card_h - 10
     card_y2 = h - FOOTER_H - 10
     card_x1 = 20
     card_x2 = w - 20
 
-    col = C_RED if (is_discrepancy or is_duplicate) else C_GREEN
-    bg_col = (15, 15, 30) if is_discrepancy else (15, 30, 20)
+    is_invalid = (scan_status == "INVALID")
+    is_discrepancy = (scan_status == "DISCREPANCY")
+    is_duplicate = (scan_status == "DUPLICATE")
 
-    # Card background
+    if is_invalid:
+        col = (40, 40, 230)       # Bright Crimson Red
+        bg_col = (12, 12, 32)
+    elif is_discrepancy:
+        col = C_RED               # Red
+        bg_col = (15, 15, 34)
+    elif is_duplicate:
+        col = (30, 180, 240)      # Amber / Gold
+        bg_col = (14, 25, 36)
+    else:
+        col = C_GREEN             # Emerald Green
+        bg_col = (15, 30, 20)
+
+    # Card background & border
     cv2.rectangle(frame, (card_x1, card_y1), (card_x2, card_y2), bg_col, -1)
     cv2.rectangle(frame, (card_x1, card_y1), (card_x2, card_y2), col, 2)
 
@@ -238,25 +300,31 @@ def draw_confirmation_card(frame, h, w, student, is_discrepancy, is_duplicate=Fa
     cv2.putText(frame, inits, (av_cx - iw // 2, av_cy + ih // 2),
                 cv2.FONT_HERSHEY_DUPLEX, 0.85, C_WHITE, 2)
 
-    # Details
-    name_str = f"Roll {student['roll']}  -  {student['name']}"
-    cv2.putText(frame, name_str, (card_x1 + 110, card_y1 + 34),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.72, C_WHITE, 2)
-
-    meta_str = f"Class 8C   |   UID: {student.get('id', 'PS-8C-' + student['roll'])}   |   Time: {time.strftime('%I:%M:%S %p')}"
-    cv2.putText(frame, meta_str, (card_x1 + 110, card_y1 + 60),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (180, 190, 185), 1)
-
-    # Status Pill
-    if is_discrepancy:
-        status_msg = "ALARM: DISCREPANCY FLAGGED! STUDENT MARKED ABSENT IN ATTENDANCE"
+    # Header and sub-details
+    if is_invalid:
+        title_str = "REJECTED: UNRECOGNIZED QR CODE"
+        raw_p = student.get('raw_payload', 'Unknown')
+        meta_str = f"Payload: {raw_p}   |   NOT IN STUDENT DATABASE   |   {time.strftime('%I:%M:%S %p')}"
+        status_msg = "SECURITY ALERT: ACCESS DENIED - NOT A REGISTERED POSHANSETU QR"
     elif is_duplicate:
+        title_str = f"Roll {student['roll']}  -  {student['name']}"
+        meta_str = f"Class 8C   |   UID: {student.get('id', 'PS-8C-' + student['roll'])}   |   Time: {time.strftime('%I:%M:%S %p')}"
         status_msg = "WARNING: DUPLICATE ATTEMPT! MEAL ALREADY ISSUED TO THIS STUDENT"
+    elif is_discrepancy:
+        title_str = f"Roll {student['roll']}  -  {student['name']}"
+        meta_str = f"Class 8C   |   UID: {student.get('id', 'PS-8C-' + student['roll'])}   |   Time: {time.strftime('%I:%M:%S %p')}"
+        status_msg = "ALARM: DISCREPANCY FLAGGED! STUDENT MARKED ABSENT IN ATTENDANCE"
     else:
+        title_str = f"Roll {student['roll']}  -  {student['name']}"
+        meta_str = f"Class 8C   |   UID: {student.get('id', 'PS-8C-' + student['roll'])}   |   Time: {time.strftime('%I:%M:%S %p')}"
         status_msg = "AUTHENTICATED: ATTENDANCE MATCHED  -  1 MEAL PLATE AUTHORIZED"
 
-    cv2.putText(frame, status_msg, (card_x1 + 110, card_y1 + 92),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.52, col, 2)
+    cv2.putText(frame, title_str, (card_x1 + 110, card_y1 + 34),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.70, C_WHITE, 2)
+    cv2.putText(frame, meta_str, (card_x1 + 110, card_y1 + 62),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (180, 190, 185), 1)
+    cv2.putText(frame, status_msg, (card_x1 + 110, card_y1 + 94),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.48, col, 2)
 
 
 # ── HTTP Server for Mobile App Live Telemetry ─────────────────
@@ -273,10 +341,13 @@ class StatusHandler(BaseHTTPRequestHandler):
 
             with state_lock:
                 last_s = app_state["last_scanned_student"]
+                last_status = app_state.get("last_scan_status", "NONE")
                 served = app_state["total_served"]
                 discrepancies = app_state["total_discrepancies"]
                 served_list = list(app_state["served_students"])
-                is_disc = app_state["last_scan_is_discrepancy"]
+                is_disc = app_state.get("last_scan_is_discrepancy", False)
+                is_inv = app_state.get("last_scan_is_invalid", False)
+                is_dup = app_state.get("last_scan_is_duplicate", False)
 
             resp = {
                 "status": "online",
@@ -287,8 +358,10 @@ class StatusHandler(BaseHTTPRequestHandler):
                 "last_scanned": {
                     "roll": last_s["roll"] if last_s else "--",
                     "name": last_s["name"] if last_s else "--",
-                    "status": "DISCREPANCY" if is_disc else ("VERIFIED" if last_s else "NONE"),
+                    "status": last_status,
                     "is_discrepancy": is_disc,
+                    "is_invalid": is_inv,
+                    "is_duplicate": is_dup,
                 } if last_s else None,
                 "timestamp": time.time(),
             }
@@ -369,47 +442,97 @@ def main():
                     last_scan_timestamp = now
 
                     # Parse roll number from payload (e.g. "QR-PS-8C-01" -> "PS-8C-01")
-                    clean_id = data.strip().replace("QR-", "")
+                    raw_payload = data.strip()
+                    clean_id = raw_payload.replace("QR-", "")
                     student = STUDENT_REGISTRY.get(clean_id)
+                    if not student and not clean_id.startswith("PS-"):
+                        student = STUDENT_REGISTRY.get(f"PS-{clean_id}")
 
+                    # Case 1: UNRECOGNIZED / INVALID QR CODE (Not in registry)
                     if not student:
-                        # Fallback parsing
-                        parts = data.split("-")
-                        roll = parts[-1] if parts else data
-                        student = {
-                            "roll": roll,
-                            "name": f"Student Roll {roll}",
-                            "status": "UNKNOWN",
-                            "initials": "ST",
-                            "color": (100, 100, 100),
+                        scan_status = "INVALID"
+                        display_student = {
+                            "roll": "??",
+                            "name": "Unregistered / Unknown QR",
+                            "raw_payload": raw_payload[:26] + ("..." if len(raw_payload) > 26 else ""),
+                            "status": "INVALID",
+                            "initials": "✕",
+                            "color": (20, 20, 180),
                         }
 
-                    is_discrepancy = (student.get("status") == "ABSENT")
-                    roll_str = student["roll"]
-
-                    with state_lock:
-                        app_state["last_scanned_student"] = student
-                        app_state["last_scan_time"] = now
-                        app_state["last_scan_is_discrepancy"] = is_discrepancy
-
-                        if is_discrepancy:
+                        with state_lock:
+                            app_state["last_scanned_student"] = display_student
+                            app_state["last_scan_status"] = scan_status
+                            app_state["last_scan_time"] = now
+                            app_state["last_scan_is_discrepancy"] = True
+                            app_state["last_scan_is_invalid"] = True
+                            app_state["last_scan_is_duplicate"] = False
                             app_state["total_discrepancies"] += 1
+
+                        play_beep(sound_type="invalid")
+                        time_str = time.strftime("%H:%M:%S")
+                        print(f"[{time_str}] ⛔ [REJECTED - UNREGISTERED QR] Scanned: '{raw_payload[:32]}' -> NOT in PoshanSetu Student Registry! Meal denied.")
+                        sync_to_supabase("INVALID", "Unregistered QR", is_discrepancy=True, scan_status="INVALID")
+
+                    else:
+                        # Recognized Student
+                        roll_str = student["roll"]
+                        display_student = dict(student)
+                        display_student["id"] = clean_id if clean_id.startswith("PS-") else f"PS-8C-{roll_str}"
+
+                        if student.get("status") == "ABSENT":
+                            # Case 2: ABSENT STUDENT (DISCREPANCY)
+                            scan_status = "DISCREPANCY"
+
+                            with state_lock:
+                                app_state["last_scanned_student"] = display_student
+                                app_state["last_scan_status"] = scan_status
+                                app_state["last_scan_time"] = now
+                                app_state["last_scan_is_discrepancy"] = True
+                                app_state["last_scan_is_invalid"] = False
+                                app_state["last_scan_is_duplicate"] = False
+                                app_state["total_discrepancies"] += 1
+
+                            play_beep(sound_type="alarm")
+                            time_str = time.strftime("%H:%M:%S")
+                            print(f"[{time_str}] 🚨 [DISCREPANCY DETECTED] Roll {roll_str} ({student['name']}) -> FLAGGED: Marked ABSENT in Class 8C roll call! Meal locked.")
+                            sync_to_supabase(roll_str, student['name'], is_discrepancy=True, scan_status="DISCREPANCY")
+
+                        elif roll_str in app_state["served_students"]:
+                            # Case 3: DUPLICATE SCAN (ALREADY SERVED)
+                            scan_status = "DUPLICATE"
+
+                            with state_lock:
+                                app_state["last_scanned_student"] = display_student
+                                app_state["last_scan_status"] = scan_status
+                                app_state["last_scan_time"] = now
+                                app_state["last_scan_is_discrepancy"] = False
+                                app_state["last_scan_is_invalid"] = False
+                                app_state["last_scan_is_duplicate"] = True
+
+                            play_beep(sound_type="duplicate")
+                            time_str = time.strftime("%H:%M:%S")
+                            print(f"[{time_str}] ⚠️ [DUPLICATE MEAL ATTEMPT] Roll {roll_str} ({student['name']}) -> Meal ALREADY served earlier today! Second plate denied.")
+                            sync_to_supabase(roll_str, student['name'], is_discrepancy=False, scan_status="DUPLICATE")
+
                         else:
-                            if roll_str not in app_state["served_students"]:
+                            # Case 4: PRESENT & FIRST TIME (AUTHORIZED MEAL)
+                            scan_status = "VERIFIED"
+
+                            with state_lock:
                                 app_state["served_students"].add(roll_str)
                                 app_state["total_served"] = len(app_state["served_students"])
+                                app_state["last_scanned_student"] = display_student
+                                app_state["last_scan_status"] = scan_status
+                                app_state["last_scan_time"] = now
+                                app_state["last_scan_is_discrepancy"] = False
+                                app_state["last_scan_is_invalid"] = False
+                                app_state["last_scan_is_duplicate"] = False
 
-                    # Play sound & print terminal log
-                    time_str = time.strftime("%H:%M:%S")
-                    if is_discrepancy:
-                        play_beep(is_discrepancy=True)
-                        print(f"[{time_str}] 🚨 [DISCREPANCY DETECTED] Roll {roll_str} ({student['name']}) -> FLAGGED: Student marked ABSENT in Class 8C roll call!")
-                    else:
-                        play_beep(is_discrepancy=False)
-                        print(f"[{time_str}] ✅ [MEAL AUTHORIZED] Roll {roll_str} ({student['name']}) -> Verified present. Plate #{app_state['total_served']} issued.")
-
-                    # Broadcast event to Supabase cloud and local clients
-                    sync_to_supabase(roll_str, student['name'], is_discrepancy)
+                            play_beep(sound_type="success")
+                            time_str = time.strftime("%H:%M:%S")
+                            print(f"[{time_str}] ✅ [MEAL AUTHORIZED] Roll {roll_str} ({student['name']}) -> Verified Present. Plate #{app_state['total_served']} issued.")
+                            sync_to_supabase(roll_str, student['name'], is_discrepancy=False, scan_status="VERIFIED")
 
             # Draw Viewfinder
             draw_viewfinder(frame, h, w, is_scanning=(data != ""))
@@ -419,11 +542,18 @@ def main():
                 try:
                     import numpy as np
                     pts_int = pts.astype(int)[0]
+                    with state_lock:
+                        last_st = app_state.get("last_scan_status", "NONE")
+                    if last_st in ("DISCREPANCY", "INVALID"):
+                        poly_col = C_RED
+                    elif last_st == "DUPLICATE":
+                        poly_col = (30, 180, 240)
+                    else:
+                        poly_col = C_GREEN
                     for j in range(len(pts_int)):
                         p1 = tuple(pts_int[j])
                         p2 = tuple(pts_int[(j + 1) % len(pts_int)])
-                        col = C_RED if app_state.get("last_scan_is_discrepancy") else C_GREEN
-                        cv2.line(frame, p1, p2, col, 3)
+                        cv2.line(frame, p1, p2, poly_col, 3)
                 except Exception:
                     pass
 
@@ -431,10 +561,10 @@ def main():
             with state_lock:
                 last_s = app_state["last_scanned_student"]
                 last_t = app_state["last_scan_time"]
-                is_disc = app_state["last_scan_is_discrepancy"]
+                last_st = app_state.get("last_scan_status", "NONE")
 
             if last_s and (now - last_t < 3.5):
-                draw_confirmation_card(frame, h, w, last_s, is_disc)
+                draw_confirmation_card(frame, h, w, last_s, last_st)
 
             # Draw HUD Overlays
             draw_hud_header(frame, w)
@@ -454,7 +584,9 @@ def main():
                     app_state["total_served"] = 0
                     app_state["total_discrepancies"] = 0
                     app_state["last_scanned_student"] = None
-                print("\n[INFO] Served counters have been RESET to 0.")
+                    app_state["last_scan_status"] = "NONE"
+                reset_supabase_served()
+                print("\n[INFO] Served counters have been RESET to 0 (synced to cloud).")
 
     except KeyboardInterrupt:
         print("\n[INFO] Stopped by user.")

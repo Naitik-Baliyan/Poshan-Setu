@@ -137,9 +137,15 @@ function LiveCameraFeedComponent({
         <View style={styles.alertBanner}>
           <Ionicons name="warning" size={16} color={COLORS.absent} style={{ marginTop: 2 }} />
           <View style={styles.alertTextWrap}>
-            <Text style={styles.alertTitle}>Discrepancy Detected by Terminal AI</Text>
+            <Text style={styles.alertTitle}>
+              {liveData.qrStatus === 'INVALID' ? 'Security Alert: Invalid QR Code' : 'Discrepancy Detected by Terminal AI'}
+            </Text>
             <Text style={styles.alertDesc}>
-              Roll 18 (Rohan S.) scanned QR at kitchen counter, but was marked ABSENT in Class 8C roll call.
+              {liveData.qrStatus === 'INVALID'
+                ? 'Unrecognized / foreign QR code scanned at kitchen counter. Access Denied (0 meals issued).'
+                : liveData.lastStudentName
+                ? `Roll ${liveData.lastQr} (${liveData.lastStudentName}) scanned QR at kitchen counter, but was marked ABSENT in Class 8C roll call.`
+                : 'Roll 18 (Rohan S.) scanned QR at kitchen counter, but was marked ABSENT in Class 8C roll call.'}
             </Text>
           </View>
         </View>
