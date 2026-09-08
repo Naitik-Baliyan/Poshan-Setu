@@ -41,8 +41,11 @@ export default function AttendanceScreen({ route, navigation }) {
           const records = JSON.parse(stored);
           const classRecord = records[classData.id];
           if (classRecord && classRecord.attendanceMap) {
-            setAttendance(classRecord.attendanceMap);
-            return;
+            const hasSub = Object.keys(classRecord.attendanceMap).some(k => !k.startsWith('_'));
+            if (hasSub && classRecord.presentCount > 0) {
+              setAttendance(classRecord.attendanceMap);
+              return;
+            }
           }
         }
         // Default initial state: all students marked Present for quick workflow

@@ -236,10 +236,64 @@ export function subscribeToRealtimeAttendance(onUpdate) {
 
   connect();
 
-  return () => {
+    return () => {
     isClosed = true;
     if (ws) {
       try { ws.close(); } catch (e) {}
     }
   };
+}
+
+/**
+ * Start New Day Session:
+ * Resets all attendance and meal records to 0 instantly across all roles.
+ * - Clears local AsyncStorage
+ * - Pushes zeroed record to Supabase (triggering Realtime WebSockets to Admin & Coordinator)
+ * - Pings local camera scanner to reset counters to 0
+ */
+export async function resetAttendanceForNewDay() {
+  try {
+    // 1. Clear local device storage immediately
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({}));
+
+    // 2. Push zero-state to Supabase Cloud for Class 8C (and broadcast to all subscribers)
+    const zeroPayload = {
+      id: '8C',
+      class_id: '8C',
+      class_name: 'Class 8 - Section C',
+      total_students: 20,
+      present_count: 0,
+      absent_count: 0,
+      expected_meals: 0,
+      recorded_by: '',
+      teacher_id: '',
+      timestamp: Date.now(),
+      synced: true,
+      attendance_map: {
+        _served_rolls: [],
+        _last_scan: null,
+      },
+    };
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/attendance_records?on_conflict=id`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify(zeroPayload),
+    });
+
+    // 3. Reset local camera scanner telemetry if running on laptop
+    const hosts = ['localhost:5050', '192.168.1.6:5050'];
+    for (const h of hosts) {
+      try {
+        fetch(`http://${h}/reset`, { method: 'POST' }).catch(() => {});
+        fetch(`http://${h}/reset`, { method: 'GET' }).catch(() => {});
+      } catch (e) {}
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.log('Error resetting attendance for new day:', err);
+    return { success: false, error: err.message };
+  }
 }

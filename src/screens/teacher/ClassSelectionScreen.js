@@ -6,12 +6,19 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { CLASSES_LIST, SCHOOL_INFO } from '../../data/mockData';
+import {
+  resetAttendanceForNewDay,
+  fetchAttendanceRecords,
+  subscribeToRealtimeAttendance,
+} from '../../services/supabaseService';
 
 // Bilingual Motivational Quotes for Teachers & PM-POSHAN Mission
 const POSHAN_QUOTES = [
@@ -58,6 +65,7 @@ export default function ClassSelectionScreen({ route, navigation }) {
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [quoteIdx, setQuoteIdx] = useState(0);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Auto cycle quotes every 7 seconds
   useEffect(() => {
@@ -71,25 +79,61 @@ export default function ClassSelectionScreen({ route, navigation }) {
     setQuoteIdx((prev) => (prev + 1) % POSHAN_QUOTES.length);
   };
 
-  // Load existing records from local AsyncStorage
+  // Load existing records from local + cloud, with instant WebSocket updates
+  const fetchStatus = async () => {
+    try {
+      const records = await fetchAttendanceRecords();
+      setAttendanceRecords(records || {});
+    } catch (err) {
+      console.log('fetchStatus err', err);
+    }
+  };
+
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('poshan_attendance_records');
-        if (stored) {
-          setAttendanceRecords(JSON.parse(stored));
-        }
-      } catch (err) {
-        console.log('AsyncStorage read err', err);
-      }
-    };
     fetchStatus();
 
-    const unsubscribe = navigation.addListener('focus', () => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
       fetchStatus();
     });
-    return unsubscribe;
+    const unsubscribeRealtime = subscribeToRealtimeAttendance(() => {
+      fetchStatus();
+    });
+
+    return () => {
+      unsubscribeFocus();
+      if (unsubscribeRealtime) unsubscribeRealtime();
+    };
   }, [navigation]);
+
+  const handleStartNewDay = () => {
+    Alert.alert(
+      'Start New Day Session? ☀️',
+      'This will reset attendance, expected meals, and kitchen counters to ZERO across Teacher, Coordinator, and Admin dashboards for a fresh morning roll call.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset to Zero',
+          style: 'destructive',
+          onPress: async () => {
+            setIsResetting(true);
+            // 1. Instant 0ms local state update on phone
+            setAttendanceRecords({});
+            try {
+              await resetAttendanceForNewDay();
+              Alert.alert(
+                'New Day Session Active ✅',
+                'All dashboards have been reset to 0. You can now take a fresh roll call for today.'
+              );
+            } catch (err) {
+              console.log('Reset error', err);
+            } finally {
+              setIsResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const assignedClasses = CLASSES_LIST.filter(
     (cls) => !teacher.assignedClasses || teacher.assignedClasses.includes(cls.id)
@@ -175,7 +219,9 @@ export default function ClassSelectionScreen({ route, navigation }) {
 
   assignedClasses.forEach((cls) => {
     const rec = attendanceRecords[cls.id];
-    if (rec && rec.presentCount !== undefined) {
+    const attMap = rec?.attendanceMap || rec?.attendance_map || {};
+    const hasMap = Object.keys(attMap).some(k => !k.startsWith('_'));
+    if (rec && typeof rec.presentCount === 'number' && rec.presentCount > 0 && hasMap) {
       totalPresentCount += rec.presentCount;
       markedClassesCount += 1;
     }
@@ -195,13 +241,31 @@ export default function ClassSelectionScreen({ route, navigation }) {
           <Text style={styles.schoolSub}>{SCHOOL_INFO.name}</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={() => navigation.replace('SelectRole')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="log-out-outline" size={20} color={COLORS.goldLight} />
-        </TouchableOpacity>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity
+            style={styles.newDayTopBtn}
+            onPress={handleStartNewDay}
+            disabled={isResetting}
+            activeOpacity={0.8}
+          >
+            {isResetting ? (
+              <ActivityIndicator size="small" color="#FDE047" />
+            ) : (
+              <>
+                <Ionicons name="sunny" size={13} color="#FDE047" />
+                <Text style={styles.newDayTopBtnText}>New Day</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={() => navigation.replace('SelectRole')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={20} color={COLORS.goldLight} />
+          </TouchableOpacity>
+        </View>
       </View>
 
 
@@ -211,6 +275,39 @@ export default function ClassSelectionScreen({ route, navigation }) {
           <Text style={styles.dateText}>{todayStr}</Text>
           <Text style={styles.teacherGreeting}>Welcome Back,</Text>
           <Text style={styles.teacherName}>{teacher.name}</Text>
+        </View>
+
+        {/* New Day Session Quick Action Card */}
+        <View style={styles.newDayCard}>
+          <View style={styles.newDayCardLeft}>
+            <View style={styles.newDayIconWrap}>
+              <Ionicons name="sunny" size={18} color="#B45309" />
+            </View>
+            <View style={styles.newDayTextCol}>
+              <Text style={styles.newDayCardTitle}>Daily Session Control</Text>
+              <Text style={styles.newDayCardSub}>
+                {markedClassesCount > 0
+                  ? `${markedClassesCount} class marked · Tap to reset for tomorrow`
+                  : 'Roster ready for fresh morning roll-call'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.newDayActionBtn}
+            onPress={handleStartNewDay}
+            disabled={isResetting}
+            activeOpacity={0.85}
+          >
+            {isResetting ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={13} color={COLORS.white} />
+                <Text style={styles.newDayActionBtnText}>New Day</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Today's Schedule Card Button */}
@@ -357,7 +454,9 @@ export default function ClassSelectionScreen({ route, navigation }) {
         {/* Classes List */}
         {assignedClasses.map((item) => {
           const rec = attendanceRecords[item.id];
-          const isDone = !!rec;
+          const attMap = rec?.attendanceMap || rec?.attendance_map || {};
+          const hasStudents = Object.keys(attMap).some(k => !k.startsWith('_'));
+          const isDone = rec && typeof rec.presentCount === 'number' && rec.presentCount > 0 && hasStudents;
 
           return (
             <TouchableOpacity
@@ -500,10 +599,87 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 2,
   },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newDayTopBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(253, 224, 71, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(253, 224, 71, 0.45)',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: SIZES.radiusSm,
+    gap: 4,
+  },
+  newDayTopBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FDE047',
+  },
   logoutBtn: {
     padding: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: SIZES.radiusSm,
+  },
+  newDayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEFCE8',
+    borderWidth: 1.5,
+    borderColor: '#FEF08A',
+    borderRadius: SIZES.radiusMd,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+    ...SHADOWS.sm,
+  },
+  newDayCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  newDayIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF08A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newDayTextCol: {
+    flex: 1,
+  },
+  newDayCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#854D0E',
+  },
+  newDayCardSub: {
+    fontSize: 11,
+    color: '#A16207',
+    marginTop: 1,
+  },
+  newDayActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.primaryDark,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: SIZES.radiusSm,
+    ...SHADOWS.xs,
+  },
+  newDayActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.white,
   },
   content: {
     backgroundColor: COLORS.background,

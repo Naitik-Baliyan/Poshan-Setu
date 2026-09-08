@@ -87,8 +87,10 @@ export default function CoordinatorDashboard({ route, navigation }) {
   CLASSES_LIST.forEach((cls) => {
     totalEnrolled += cls.strength;
     const rec = attendanceRecords[cls.id];
-    if (rec) {
-      totalPresent += rec.presentCount || 0;
+    const attMap = rec?.attendanceMap || rec?.attendance_map || {};
+    const hasMap = Object.keys(attMap).some(k => !k.startsWith('_'));
+    if (rec && typeof rec.presentCount === 'number' && rec.presentCount > 0 && hasMap) {
+      totalPresent += rec.presentCount;
       classesReceived += 1;
     }
   });

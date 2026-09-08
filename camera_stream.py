@@ -334,7 +334,20 @@ class StatusHandler(BaseHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path.startswith('/status'):
+        if self.path.startswith('/reset'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            with state_lock:
+                app_state["served_students"].clear()
+                app_state["total_served"] = 0
+                app_state["total_discrepancies"] = 0
+                app_state["last_scanned_student"] = None
+                app_state["last_scan_status"] = "NONE"
+            self.wfile.write(b'{"status":"reset_ok"}')
+            print("\n[INFO] Remote reset received: All counters set to 0 for New Day Session.")
+            return
+        elif self.path.startswith('/status'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
@@ -366,6 +379,13 @@ class StatusHandler(BaseHTTPRequestHandler):
                 "timestamp": time.time(),
             }
             self.wfile.write(json.dumps(resp).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path.startswith('/reset'):
+            self.do_GET()
         else:
             self.send_response(404)
             self.end_headers()
