@@ -1,6 +1,9 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import { Alert } from 'react-native';
 import { SCHOOL_INFO, STUDENTS_BY_CLASS, CLASSES_LIST } from '../data/mockData';
+
 
 /**
  * Generates and shares an official PM-POSHAN daily compliance audit PDF.
@@ -424,18 +427,40 @@ export async function generateDailyAuditPDF({
 </body>
 </html>`;
 
-  // Print to PDF
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
+  // ── Generate PDF from HTML ─────────────────────────────────────────
+  const { uri: rawUri } = await Print.printToFileAsync({ html, base64: false });
 
-  // Share / download
-  const canShare = await Sharing.isAvailableAsync();
-  if (canShare) {
-    await Sharing.shareAsync(uri, {
-      mimeType: 'application/pdf',
-      dialogTitle: 'Download PM-POSHAN Daily Audit Report',
-      UTI: 'com.adobe.pdf',
-    });
+  // Copy to a stable, human-readable filename in the app's cache directory
+  // (expo-print writes to a random temp path; renaming makes it open correctly)
+  const destUri = FileSystem.cacheDirectory + `PoshanSetu_Audit_${Date.now()}.pdf`;
+  await FileSystem.copyAsync({ from: rawUri, to: destUri });
+
+  // ── Share / open ───────────────────────────────────────────────────
+  try {
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(destUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Save / Share — PM-POSHAN Daily Audit Report',
+        UTI: 'com.adobe.pdf',
+      });
+    } else {
+      // Fallback: show path so the user can locate it manually
+      Alert.alert(
+        'PDF Generated ✓',
+        `Report saved to:\n${destUri}\n\nYou can open it from your device's Files app.`,
+        [{ text: 'OK' }]
+      );
+    }
+  } catch (shareErr) {
+    console.warn('Sharing error:', shareErr);
+    Alert.alert(
+      'PDF Ready',
+      `Could not open the share sheet, but the PDF was generated:\n${destUri}`,
+      [{ text: 'OK' }]
+    );
   }
 
-  return uri;
+  return destUri;
 }
+
