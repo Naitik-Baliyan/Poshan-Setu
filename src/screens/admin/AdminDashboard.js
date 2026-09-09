@@ -116,10 +116,10 @@ export default function AdminDashboard({ route, navigation }) {
         adminInfo: admin,
       });
     } catch (err) {
-      console.log('PDF error', err);
+      console.log('PDF error:', err);
       Alert.alert(
         'Export Failed',
-        'Could not generate the PDF. Please try again.',
+        err?.message || 'Could not generate the PDF. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
