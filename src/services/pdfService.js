@@ -14,6 +14,24 @@ import * as Sharing from 'expo-sharing';
 import { Alert, Platform } from 'react-native';
 import { SCHOOL_INFO, STUDENTS_BY_CLASS, CLASSES_LIST } from '../data/mockData';
 
+/**
+ * Ensures any string is 100% compliant with PDF Standard WinAnsi / ASCII encoding.
+ * Strips narrow no-break space (0x202F), non-breaking space (0x00A0), curly quotes,
+ * and any other Unicode characters that crash pdf-lib StandardFonts.
+ */
+function toWinAnsi(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .normalize('NFKD')
+    .replace(/[\u202F\u00A0\u1680\u2000-\u200B\u2028\u2029\u205F\u3000]/g, ' ')
+    .replace(/[\u2018\u2019\u00B4\u02BC]/g, "'")
+    .replace(/[\u201C\u201D\u201E]/g, '"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, '-')
+    .replace(/[\u2022\u00B7\u2027]/g, '|')
+    .replace(/\u20B9/g, 'Rs. ')
+    .replace(/[^\x20-\x7E]/g, ' ');
+}
+
 export async function generateDailyAuditPDF({
   attendanceRecords = {},
   servedRolls = [],
@@ -22,6 +40,12 @@ export async function generateDailyAuditPDF({
   try {
     const doc = await PDFDocument.create();
     const page = doc.addPage([595.28, 841.89]); // A4 dimensions: 595.28 x 841.89 pt
+
+    // Intercept all drawText calls on this page to guarantee WinAnsi safety
+    const rawDrawText = page.drawText.bind(page);
+    page.drawText = (text, options) => {
+      return rawDrawText(toWinAnsi(text), options);
+    };
 
     const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
     const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
@@ -37,12 +61,16 @@ export async function generateDailyAuditPDF({
     const C_ROW_BG     = rgb(0.97, 0.98, 0.97);
     const C_WHITE      = rgb(1.0, 1.0, 1.0);
 
-    const dateStr = new Date().toLocaleDateString('en-IN', {
+    const now = new Date();
+    const dateStr = toWinAnsi(now.toLocaleDateString('en-IN', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    });
-    const timeStr = new Date().toLocaleTimeString('en-IN', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    });
+    }));
+    const hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = String(hours % 12 || 12).padStart(2, '0');
+    const timeStr = `${displayHours}:${minutes}:${seconds} ${ampm}`;
     const reportId = `PS-AUD-${Date.now().toString().slice(-7)}`;
 
     const servedSet = new Set(
