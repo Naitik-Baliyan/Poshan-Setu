@@ -8,6 +8,7 @@
  * This approach works in Expo Go WITHOUT a custom dev build.
  */
 
+import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
@@ -49,18 +50,20 @@ export async function generateDailyAuditPDF({
 
     students.forEach((st) => {
       const rollStr   = String(st.rollNo || st.roll || '').padStart(2, '0');
-      const isServed  = servedSet.has(rollStr);
-      const rawStatus = attMap[st.roll] || attMap[rollStr] || null;
-      const status    = rawStatus || 'PRESENT';
+      const isServed  = servedSet.has(rollStr) || servedSet.has(String(parseInt(rollStr, 10)));
+      const attVal    = attMap[st.id] || attMap[st.rollNo] || attMap[rollStr];
+      const isAbsent  = attVal === 'A' || attVal === 'ABSENT';
+      const isPresent = attVal === 'P' || attVal === 'PRESENT';
+      const status    = isAbsent ? 'ABSENT' : isPresent ? 'PRESENT' : 'PRESENT';
 
       if (isServed) {
         clsServed += 1;
-        if (status === 'ABSENT') {
+        if (isAbsent) {
           discrepancies.push({
             studentName: st.name,
             roll: rollStr,
             classId: cls.id,
-            detail: 'Marked ABSENT in roll-call but attempted meal QR scan.',
+            detail: 'Marked ABSENT in morning roll-call but attempted meal QR scan.',
           });
         }
       } else if (status === 'PRESENT') {
@@ -122,9 +125,11 @@ export async function generateDailyAuditPDF({
 
   const studentRows = students8C.map((st, idx) => {
     const rollStr   = String(st.rollNo || st.roll || '').padStart(2, '0');
-    const rawStatus = attMap8C[st.roll] || attMap8C[rollStr] || null;
-    const status    = rawStatus || (idx < 17 ? 'PRESENT' : 'ABSENT');
-    const isServed  = servedSet.has(rollStr);
+    const attVal    = attMap8C[st.id] || attMap8C[st.rollNo] || attMap8C[rollStr];
+    const isAbsent  = attVal === 'A' || attVal === 'ABSENT';
+    const isPresent = attVal === 'P' || attVal === 'PRESENT';
+    const status    = isAbsent ? 'ABSENT' : isPresent ? 'PRESENT' : (idx < 6 ? 'PRESENT' : 'ABSENT');
+    const isServed  = servedSet.has(rollStr) || servedSet.has(String(parseInt(rollStr, 10)));
     const distLabel = isServed ? '✔ MEAL TAKEN' : status === 'PRESENT' ? '⏳ PENDING' : '✕ INELIGIBLE';
     const distColor = isServed ? '#15803D' : status === 'PRESENT' ? '#D97706' : '#6B7280';
     const attColor  = status === 'PRESENT' ? '#15803D' : '#DC2626';
@@ -297,34 +302,56 @@ export async function generateDailyAuditPDF({
 </body>
 </html>`;
 
-  /* ── Write HTML to cache ──────────────────────────────────── */
-  const filename = `PoshanSetu_Audit_${Date.now()}.html`;
-  const fileUri  = FileSystem.cacheDirectory + filename;
-
-  await FileSystem.writeAsStringAsync(fileUri, html, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-
-  /* ── Share the HTML file ──────────────────────────────────── */
+  /* ── Generate Actual PDF Document via expo-print ────────── */
   try {
+    const { uri: pdfUri } = await Print.printToFileAsync({
+      html,
+      base64: false,
+    });
+
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'text/html',
-        dialogTitle: 'Open / Share — PM-POSHAN Daily Audit Report',
-        UTI: 'public.html',
+      await Sharing.shareAsync(pdfUri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'PM-POSHAN Daily Compliance Audit Report (PDF)',
+        UTI: 'com.adobe.pdf',
       });
     } else {
-      Alert.alert(
-        'Report Generated ✓',
-        'Your daily audit report is ready. Sharing is not available on this device.',
-        [{ text: 'OK' }]
-      );
+      // If direct sharing isn't available, open native system print dialog
+      await Print.printAsync({ html });
     }
-  } catch (err) {
-    console.warn('Share error:', err);
-    Alert.alert('Report Ready', 'Report was generated but could not be shared automatically.', [{ text: 'OK' }]);
-  }
+    return pdfUri;
+  } catch (printErr) {
+    console.warn('Print.printToFileAsync error, using FileSystem fallback:', printErr);
 
-  return fileUri;
+    // Fallback: Write HTML file and share
+    const filename = `PoshanSetu_Audit_${Date.now()}.html`;
+    const fileUri  = FileSystem.cacheDirectory + filename;
+
+    await FileSystem.writeAsStringAsync(fileUri, html, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/html',
+          dialogTitle: 'Open / Share — PM-POSHAN Daily Audit Report',
+          UTI: 'public.html',
+        });
+      } else {
+        Alert.alert(
+          'Report Generated ✓',
+          'Your daily audit report is ready. Sharing is not available on this device.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (shareErr) {
+      console.warn('Share error:', shareErr);
+      Alert.alert('Report Ready', 'Report was generated but could not be shared automatically.', [{ text: 'OK' }]);
+    }
+
+    return fileUri;
+  }
 }
