@@ -14,7 +14,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES, SHADOWS } from '../../constants/theme';
 import { CLASSES_LIST, SCHOOL_INFO } from '../../data/mockData';
 import { fetchAttendanceRecords, subscribeToRealtimeAttendance } from '../../services/supabaseService';
-import LiveCameraFeed from '../../components/LiveCameraFeed';
 
 // Per-student meal ingredient ratios (grams) — PM-POSHAN norms
 const MEAL_NORMS = {
@@ -317,17 +316,6 @@ export default function CoordinatorDashboard({ route, navigation }) {
               </View>
             </View>
 
-            {/* Live Dining Hall CCTV & Serving Queue */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>AI Vision Terminal & Serving Queue</Text>
-              <Text style={styles.sectionSub}>Live Telemetry from Unit CAM-01 (Laptop AI Engine)</Text>
-            </View>
-            <LiveCameraFeed
-              cameraHost="192.168.1.6:5050"
-              title="Kitchen Serving Window AI Unit"
-              subtitle="Real-time Queue & Plate Monitoring"
-              detectedCount={totalPresent > 0 ? totalPresent : 17}
-            />
           </>
         )}
 
